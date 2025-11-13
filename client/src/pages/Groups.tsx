@@ -151,13 +151,11 @@ export default function Groups() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/groups/${item.group.id}`}>
-                      <a>
-                        <Button variant="ghost" size="icon">
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </a>
-                    </Link>
+                    <Button asChild variant="ghost" size="icon">
+                      <Link href={`/groups/${item.group.id}`}>
+                        <Settings className="h-4 w-4" />
+                      </Link>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

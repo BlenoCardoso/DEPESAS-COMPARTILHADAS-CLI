@@ -179,36 +179,36 @@ export default function Home() {
       </div>
 
       {/* Ações rápidas */}
-      <Card>
+          <Card>
         <CardHeader>
           <CardTitle>Ações Rápidas</CardTitle>
           <CardDescription>Acesse rapidamente as funcionalidades principais</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3">
-          <Link href="/groups">
-            <Button variant="outline" className="w-full justify-start gap-2">
+          <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Link href="/groups">
               <Users className="h-4 w-4" />
               Criar Grupo
-            </Button>
-          </Link>
-          <Link href="/shared-expenses">
-            <Button variant="outline" className="w-full justify-start gap-2">
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Link href="/shared-expenses">
               <CreditCard className="h-4 w-4" />
               Nova Despesa
-            </Button>
-          </Link>
-          <Link href="/tasks">
-            <Button variant="outline" className="w-full justify-start gap-2">
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Link href="/tasks">
               <TrendingUp className="h-4 w-4" />
               Adicionar Tarefa
-            </Button>
-          </Link>
-          <Link href="/reports">
-            <Button variant="outline" className="w-full justify-start gap-2">
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Link href="/reports">
               <TrendingUp className="h-4 w-4" />
               Ver Relatórios
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
