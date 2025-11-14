@@ -3,5 +3,5 @@
  * Import shared types from this single entry point.
  */
 
-export type * from "../drizzle/schema";
+// Removed broken export (drizzle schema not present)
 export * from "./_core/errors";

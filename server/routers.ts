@@ -30,13 +30,13 @@ export const appRouter = router({
         const groupId = await db.createGroup({
           name: input.name,
           description: input.description,
-          ownerId: ctx.user.id,
+          ownerId: ctx.user.id!,
         });
 
         // Adicionar o criador como membro owner
         await db.addGroupMember({
           groupId,
-          userId: ctx.user.id,
+          userId: ctx.user.id!,
           role: "owner",
         });
 
@@ -52,7 +52,7 @@ export const appRouter = router({
     getById: protectedProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ ctx, input }) => {
-        const group = await db.getGroupById(input.id);
+        const group = await db.getGroupById(input.id) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
 
         const isMember = await db.isUserInGroup(ctx.user.id!, input.id);
@@ -68,7 +68,7 @@ export const appRouter = router({
         description: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const group = await db.getGroupById(input.id);
+        const group = await db.getGroupById(input.id) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
         if (group.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -83,7 +83,7 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const group = await db.getGroupById(input.id);
+        const group = await db.getGroupById(input.id) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
         if (group.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -106,7 +106,7 @@ export const appRouter = router({
         userId: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const group = await db.getGroupById(input.groupId);
+        const group = await db.getGroupById(input.groupId) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
         if (group.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -189,7 +189,7 @@ export const appRouter = router({
     getById: protectedProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ ctx, input }) => {
-        const expense = await db.getSharedExpenseById(input.id);
+        const expense = await db.getSharedExpenseById(input.id) as any;
         if (!expense) throw new TRPCError({ code: "NOT_FOUND" });
 
         const isMember = await db.isUserInGroup(ctx.user.id!, expense.groupId);
@@ -209,7 +209,7 @@ export const appRouter = router({
         date: z.date().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const expense = await db.getSharedExpenseById(input.id);
+        const expense = await db.getSharedExpenseById(input.id) as any;
         if (!expense) throw new TRPCError({ code: "NOT_FOUND" });
         if (expense.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -227,7 +227,7 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const expense = await db.getSharedExpenseById(input.id);
+        const expense = await db.getSharedExpenseById(input.id) as any;
         if (!expense) throw new TRPCError({ code: "NOT_FOUND" });
         if (expense.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
@@ -238,7 +238,7 @@ export const appRouter = router({
     validate: protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const expense = await db.getSharedExpenseById(input.id);
+        const expense = await db.getSharedExpenseById(input.id) as any;
         if (!expense) throw new TRPCError({ code: "NOT_FOUND" });
 
         const isMember = await db.isUserInGroup(ctx.user.id!, expense.groupId);
@@ -492,7 +492,7 @@ export const appRouter = router({
         invitedEmail: z.string().email(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const group = await db.getGroupById(input.groupId);
+        const group = await db.getGroupById(input.groupId) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
 
         const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
@@ -534,7 +534,7 @@ export const appRouter = router({
         accept: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const invitation = await db.getInvitationsByEmail(ctx.user.email || "");
+        const invitation = await db.getInvitationsByEmail(ctx.user.email || "") as any[];
         const inv = invitation.find(i => i.id === input.id);
         
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
@@ -572,24 +572,61 @@ export const appRouter = router({
         unreadOnly: z.boolean().default(false),
       }).optional())
       .query(async ({ ctx, input }) => {
-        return await db.getUserNotifications(ctx.user.id, input?.unreadOnly);
+        return await db.getUserNotifications(ctx.user.id!, input?.unreadOnly);
       }),
 
     markAsRead: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await db.markNotificationAsRead(input.id);
+        await db.markNotificationAsRead(input.id as any);
         return { success: true };
       }),
 
     markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
-      await db.markAllNotificationsAsRead(ctx.user.id);
+      await db.markAllNotificationsAsRead(ctx.user.id!);
       return { success: true };
     }),
 
     getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
       return await db.getUnreadNotificationCount(ctx.user.id!);
     }),
+  }),
+
+  // ============ REPORTS ROUTER ============
+  reports: router({
+    summary: protectedProcedure
+      .input(z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        // grupos do usuário
+        const groups = await db.getUserGroups(ctx.user.id!);
+        const groupIds = groups.map(g => g.group.id);
+        // despesas pessoais (com range opcional)
+        const personal = await db.getUserPersonalExpenses(ctx.user.id!, input?.startDate, input?.endDate);
+        // despesas compartilhadas agregadas
+        let shared: any[] = [];
+        for (const gid of groupIds) {
+          const list = await db.getGroupSharedExpenses(gid);
+          // aplicar filtro de data se informado
+          const filtered = list.filter(item => {
+            const d = new Date(item.expense.date);
+            if (input?.startDate && d < input.startDate) return false;
+            if (input?.endDate && d > input.endDate) return false;
+            return true;
+          });
+          shared = shared.concat(filtered);
+        }
+
+        const personalTotal = personal.reduce((acc, e: any) => acc + (e.amount || 0), 0);
+        const sharedTotal = shared.reduce((acc, e: any) => acc + (e.expense?.amount || 0), 0);
+        const byCategory: Record<string, number> = {};
+        personal.forEach((e: any) => { const cat = e.category || "Outros"; byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0); });
+        shared.forEach(e => { const cat = e.expense?.category || "Outros"; byCategory[cat] = (byCategory[cat] || 0) + (e.expense?.amount || 0); });
+        const categories = Object.entries(byCategory).sort((a,b) => b[1]-a[1]).map(([name,total]) => ({ name, total }));
+        return { personalTotal, sharedTotal, grandTotal: personalTotal + sharedTotal, categories };
+      }),
   }),
 });
 
