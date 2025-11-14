@@ -1,7 +1,10 @@
 import "dotenv/config";
 import express from "express";
-import { createServer } from "http";
+import { createServer as createHttpServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import net from "net";
+import os from "os";
+import fs from "node:fs";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerFirebaseAuthRoutes } from "./firebaseAuth";
@@ -30,7 +33,30 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
-  const server = createServer(app);
+  const useHttps = process.env.DEV_HTTPS === "true" || process.env.NODE_ENV === "production";
+
+  const server = (() => {
+    if (useHttps) {
+      const pfxPath = process.env.DEV_SSL_PFX;
+      const keyPath = process.env.DEV_SSL_KEY;
+      const certPath = process.env.DEV_SSL_CERT;
+      try {
+        if (pfxPath && fs.existsSync(pfxPath)) {
+          const passphrase = process.env.DEV_SSL_PASSPHRASE || undefined;
+          return createHttpsServer({ pfx: fs.readFileSync(pfxPath), passphrase }, app);
+        }
+        if (keyPath && certPath && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+          return createHttpsServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
+        }
+        console.warn("[Dev HTTPS] Certificado não encontrado. Caindo para HTTP. Configure DEV_SSL_PFX ou DEV_SSL_KEY/DEV_SSL_CERT.");
+        return createHttpServer(app);
+      } catch (e) {
+        console.warn("[Dev HTTPS] Falha ao carregar certificado:", e);
+        return createHttpServer(app);
+      }
+    }
+    return createHttpServer(app);
+  })();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -60,8 +86,20 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, "0.0.0.0", () => {
+    const proto = useHttps ? "https" : "http";
+    console.log(`Server running on ${proto}://localhost:${port}/`);
+    const nets = os.networkInterfaces();
+    const lanIps = Object.values(nets)
+      .flatMap(ifaces => ifaces ?? [])
+      .filter(iface => iface && iface.family === "IPv4" && !iface.internal)
+      .map(iface => iface!.address);
+    if (lanIps.length) {
+      console.log(`LAN access:`);
+      for (const ip of lanIps) {
+        console.log(`  -> ${proto}://${ip}:${port}/`);
+      }
+    }
   });
 }
 

@@ -19,6 +19,9 @@ google-services.json
 service-account.json
 firebase-admin-*.json
 
+# Certificados locais (HTTPS dev)
+.cert/
+
 # IDE and editor files
 .vscode/
 .idea/
