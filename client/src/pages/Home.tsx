@@ -17,6 +17,10 @@ export default function Home() {
   const { data: unreadCount } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  const { data: notifications } = trpc.notifications.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const notificationsCount = notifications?.length ?? 0;
 
   const { data: personalExpenses } = trpc.personalExpenses.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -187,10 +191,13 @@ export default function Home() {
                 {unreadCount || 0}
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{unreadCount || 0}</div>
+            <CardContent className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-bold">{notificationsCount}</div>
+                <span className="text-xs text-muted-foreground">total</span>
+              </div>
               <p className="text-xs text-muted-foreground">
-                {unreadCount === 1 ? "notificação não lida" : "notificações não lidas"}
+                {unreadCount || 0} {unreadCount === 1 ? "não lida" : "não lidas"}
               </p>
             </CardContent>
           </Card>
