@@ -23,5 +23,12 @@ export function adminAuth() {
 }
 
 export function adminDb() {
-  return getFirestore(init());
+  const db = getFirestore(init());
+  // Garante ignoreUndefinedProperties no ambiente admin (evita erros ao gravar campos undefined)
+  try {
+    db.settings({ ignoreUndefinedProperties: true });
+  } catch (_) {
+    // settings só pode ser chamada antes de qualquer operação; se já foi chamada ignoramos
+  }
+  return db;
 }

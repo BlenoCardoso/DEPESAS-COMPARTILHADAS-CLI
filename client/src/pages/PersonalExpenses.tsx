@@ -47,7 +47,8 @@ export default function PersonalExpenses() {
   const handleCreate = () => {
     const cents = parseReaisToCents(amount);
     if (!title.trim() || !cents) { toast.error("Título e valor obrigatórios"); return; }
-    createMutation.mutate({ title, amount: cents, date: new Date(date + 'T00:00:00'), currency: 'BRL', category: category || undefined, description: undefined });
+    // description removida para evitar envio de undefined ao Firestore
+    createMutation.mutate({ title, amount: cents, date: new Date(date + 'T00:00:00'), currency: 'BRL', category: category || undefined });
   };
   const startEdit = (item: any) => {
     setEditing(item);

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Settings, Trash2, Users } from "lucide-react";
+import { Loader2, Plus, Settings, Trash2, Users, MailPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -16,6 +16,9 @@ export default function Groups() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
 
   const { data: groups, isLoading, refetch } = trpc.groups.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -43,6 +46,21 @@ export default function Groups() {
       toast.error("Erro ao excluir grupo: " + error.message);
     },
   });
+
+  const inviteMutation = trpc.invitations.create.useMutation({
+    onSuccess: () => {
+      toast.success("Convite enviado");
+      setInviteOpen(false);
+      setInviteEmail("");
+    },
+    onError: (error) => toast.error("Erro ao convidar: " + error.message),
+  });
+
+  const handleInvite = () => {
+    if (!inviteGroupId) return;
+    if (!inviteEmail.trim()) { toast.error("Email é obrigatório"); return; }
+    inviteMutation.mutate({ groupId: inviteGroupId, invitedEmail: inviteEmail.trim() });
+  };
 
   const handleCreate = () => {
     if (!name.trim()) {
@@ -159,6 +177,14 @@ export default function Groups() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      title="Convidar"
+                      onClick={() => { setInviteGroupId(item.group.id); setInviteOpen(true); }}
+                    >
+                      <MailPlus className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleDelete(item.group.id)}
                       disabled={deleteMutation.isPending}
                     >
@@ -177,6 +203,24 @@ export default function Groups() {
           ))}
         </div>
       )}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Convidar para o Grupo</DialogTitle>
+            <DialogDescription>Informe o email do usuário para enviar um convite</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Email *</Label>
+              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="usuario@exemplo.com" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancelar</Button>
+            <Button onClick={handleInvite} disabled={inviteMutation.isPending}>{inviteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Enviar Convite</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

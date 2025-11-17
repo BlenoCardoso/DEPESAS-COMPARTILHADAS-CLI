@@ -9,10 +9,10 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, Plus, Trash2, Pencil, CheckCircle2, Filter } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { formatCents, parseReaisToCents } from "@/lib/utils";
+import { formatCents, parseReaisToCents, userLabel } from "@/lib/utils";
 
 export default function SharedExpenses() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -117,7 +117,7 @@ export default function SharedExpenses() {
       date: new Date(date + 'T00:00:00'),
       currency: "BRL",
       category: category || undefined,
-      description: undefined,
+      // description omitida para evitar envio de undefined
       splits,
     });
   };
@@ -213,7 +213,7 @@ export default function SharedExpenses() {
                     <CardContent className="grid grid-cols-2 gap-2 text-xs">
                       {splits.map(s => (
                         <div key={s.userId} className="flex justify-between">
-                          <span>{membersQuery.data?.find(m => m.user.id === s.userId)?.user.name || s.userId}</span>
+                          <span>{userLabel(membersQuery.data?.find(m => m.user.id === s.userId)?.user, user || undefined) || s.userId}</span>
                           <span className="font-medium">{s.amount}</span>
                         </div>
                       ))}
@@ -299,7 +299,7 @@ export default function SharedExpenses() {
                 <CardContent className="space-y-2">
                   {detailQuery.data.splits.map(s => (
                     <div key={s.split.id} className="flex justify-between text-xs">
-                      <span>{s.user.name || s.user.id}</span>
+                      <span>{userLabel(s.user, user || undefined)}</span>
                       <span className="font-medium">{formatCents(s.split.amount)}</span>
                     </div>
                   ))}

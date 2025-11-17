@@ -27,7 +27,8 @@ export default function Calendar() {
 
   const handleCreate = () => {
     if (!title.trim()) { toast.error("Título obrigatório"); return; }
-    createMutation.mutate({ title, description: undefined, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : undefined, allDay });
+    // Omitir description quando não utilizada para evitar erro Firestore
+    createMutation.mutate({ title, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : undefined, allDay });
   };
   const handleDelete = (id: string) => { if (confirm("Remover evento?")) deleteMutation.mutate({ id }); };
 

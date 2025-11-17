@@ -17,6 +17,10 @@ export default function Home() {
     enabled: isAuthenticated,
   });
 
+  const { data: personalExpenses } = trpc.personalExpenses.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -152,7 +156,7 @@ export default function Home() {
               <Wallet className="h-5 w-5 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">-</div>
+              <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
               <p className="text-xs text-muted-foreground">
                 Ver minhas despesas
               </p>

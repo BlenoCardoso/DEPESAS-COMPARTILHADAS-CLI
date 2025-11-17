@@ -47,6 +47,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     { icon: Clock, label: "Lembretes", path: "/reminders" },
     { icon: Calendar, label: "Calendário", path: "/calendar" },
     { icon: PieChart, label: "Relatórios", path: "/reports" },
+    { icon: ListTodo, label: "Convites", path: "/invitations" },
   ];
 
   const forceMobile = (() => {

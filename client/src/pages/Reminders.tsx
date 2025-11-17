@@ -26,7 +26,8 @@ export default function Reminders() {
 
   const handleCreate = () => {
     if (!title.trim()) { toast.error("Título obrigatório"); return; }
-    createMutation.mutate({ title, category: category || undefined, description: undefined, reminderDate: new Date(reminderDate) });
+    // Remover campo description undefined
+    createMutation.mutate({ title, category: category || undefined, reminderDate: new Date(reminderDate) });
   };
   const handleDelete = (id: string) => { if (confirm("Remover lembrete?")) deleteMutation.mutate({ id }); };
 

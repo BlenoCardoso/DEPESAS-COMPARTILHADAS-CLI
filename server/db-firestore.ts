@@ -31,6 +31,10 @@ const normalize = <T extends Record<string, any>>(obj: T): T => {
 
 const nowUpdate = () => ({ updatedAt: FieldValue.serverTimestamp() });
 const nowCreate = () => ({ createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+// Remove chaves com valor undefined para prevenir erros Firestore
+const omitUndefined = <T extends Record<string, any>>(obj: T): T => {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+};
 
 // ============ USERS ============
 export async function upsertUser(user: User): Promise<void> {
@@ -82,7 +86,7 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 // ============ GROUPS ============
 export async function createGroup(data: { name: string; description?: string; ownerId: string }) {
   const db = adminDb();
-  const ref = await db.collection("groups").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("groups").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -115,7 +119,7 @@ export async function getUserGroups(userId: string) {
 
 export async function updateGroup(id: string, data: { name?: string; description?: string }) {
   const db = adminDb();
-  await db.collection("groups").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("groups").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deleteGroup(id: string) {
@@ -168,7 +172,7 @@ export async function isUserInGroup(userId: string, groupId: string) {
 // ============ SHARED EXPENSES ============
 export async function createSharedExpense(data: any) {
   const db = adminDb();
-  const ref = await db.collection("sharedExpenses").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("sharedExpenses").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -197,7 +201,7 @@ export async function getGroupSharedExpenses(groupId: string) {
 
 export async function updateSharedExpense(id: string, data: any) {
   const db = adminDb();
-  await db.collection("sharedExpenses").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("sharedExpenses").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deleteSharedExpense(id: string) {
@@ -243,7 +247,7 @@ export async function markSplitAsPaid(id: string) {
 // ============ PERSONAL EXPENSES ============
 export async function createPersonalExpense(data: any) {
   const db = adminDb();
-  const ref = await db.collection("personalExpenses").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("personalExpenses").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -259,7 +263,7 @@ export async function getUserPersonalExpenses(userId: string, startDate?: Date, 
 
 export async function updatePersonalExpense(id: string, data: any) {
   const db = adminDb();
-  await db.collection("personalExpenses").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("personalExpenses").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deletePersonalExpense(id: string) {
@@ -270,7 +274,7 @@ export async function deletePersonalExpense(id: string) {
 // ============ TASKS ============
 export async function createTask(data: any) {
   const db = adminDb();
-  const ref = await db.collection("tasks").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("tasks").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -284,7 +288,7 @@ export async function getUserTasks(userId: string, completed?: boolean) {
 
 export async function updateTask(id: string, data: any) {
   const db = adminDb();
-  await db.collection("tasks").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("tasks").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deleteTask(id: string) {
@@ -300,7 +304,7 @@ export async function toggleTaskCompleted(id: string, completed: boolean) {
 // ============ REMINDERS ============
 export async function createReminder(data: any) {
   const db = adminDb();
-  const ref = await db.collection("reminders").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("reminders").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -312,7 +316,7 @@ export async function getUserReminders(userId: string) {
 
 export async function updateReminder(id: string, data: any) {
   const db = adminDb();
-  await db.collection("reminders").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("reminders").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deleteReminder(id: string) {
@@ -323,7 +327,7 @@ export async function deleteReminder(id: string) {
 // ============ CALENDAR ============
 export async function createCalendarEvent(data: any) {
   const db = adminDb();
-  const ref = await db.collection("calendarEvents").add({ ...data, ...nowCreate() });
+  const ref = await db.collection("calendarEvents").add({ ...omitUndefined(data), ...nowCreate() });
   return ref.id;
 }
 
@@ -339,7 +343,7 @@ export async function getUserCalendarEvents(userId: string, startDate?: Date, en
 
 export async function updateCalendarEvent(id: string, data: any) {
   const db = adminDb();
-  await db.collection("calendarEvents").doc(id).set({ ...data, ...nowUpdate() }, { merge: true });
+  await db.collection("calendarEvents").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
 }
 
 export async function deleteCalendarEvent(id: string) {
