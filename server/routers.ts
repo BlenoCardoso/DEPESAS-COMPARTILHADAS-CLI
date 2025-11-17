@@ -186,6 +186,23 @@ export const appRouter = router({
         return await db.getGroupSharedExpenses(input.groupId);
       }),
 
+    // Total de despesas compartilhadas em todos os grupos do usuário
+    countForUser: protectedProcedure
+      .query(async ({ ctx }) => {
+        const groups = await db.getUserGroups(ctx.user.id!);
+        let count = 0;
+        let totalAmount = 0; // em centavos
+        for (const g of groups) {
+          const list = await db.getGroupSharedExpenses(g.group.id);
+          count += list.length;
+          for (const item of list) {
+            const amt = Number(item.expense?.amount) || 0;
+            totalAmount += amt;
+          }
+        }
+        return { count, totalAmount };
+      }),
+
     getById: protectedProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ ctx, input }) => {

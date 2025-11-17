@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_TITLE, getLoginUrl } from "@/const";
+import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { CreditCard, TrendingUp, Users, Calendar, Bell, Wallet } from "lucide-react";
 import { Link } from "wouter";
@@ -18,6 +19,12 @@ export default function Home() {
   });
 
   const { data: personalExpenses } = trpc.personalExpenses.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+
+  const personalTotal = personalExpenses?.reduce((sum, e: any) => sum + (e.amount || 0), 0) || 0;
+
+  const { data: sharedCountData } = trpc.sharedExpenses.countForUser.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
@@ -140,11 +147,15 @@ export default function Home() {
               <CardTitle className="text-sm font-medium">Despesas Compartilhadas</CardTitle>
               <CreditCard className="h-5 w-5 text-secondary" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">-</div>
-              <p className="text-xs text-muted-foreground">
-                Ver todas as despesas
-              </p>
+            <CardContent className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-bold">{sharedCountData?.count ?? 0}</div>
+                <span className="text-xs text-muted-foreground">itens</span>
+              </div>
+              <div className="text-sm font-medium">
+                {formatCents(sharedCountData?.totalAmount ?? 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">Ver todas as despesas</p>
             </CardContent>
           </Card>
         </Link>
@@ -155,11 +166,15 @@ export default function Home() {
               <CardTitle className="text-sm font-medium">Despesas Pessoais</CardTitle>
               <Wallet className="h-5 w-5 text-accent" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Ver minhas despesas
-              </p>
+            <CardContent className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
+                <span className="text-xs text-muted-foreground">itens</span>
+              </div>
+              <div className="text-sm font-medium">
+                {formatCents(personalTotal)}
+              </div>
+              <p className="text-xs text-muted-foreground">Ver minhas despesas</p>
             </CardContent>
           </Card>
         </Link>
