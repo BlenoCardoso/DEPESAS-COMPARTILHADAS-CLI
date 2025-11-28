@@ -77,7 +77,7 @@ export const appRouter = router({
           description: input.description,
         });
 
-        return { success: true };
+        return { success: true, groupId: inv.groupId };
       }),
 
     delete: protectedProcedure
@@ -509,6 +509,7 @@ export const appRouter = router({
         invitedEmail: z.string().email(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const invitedEmail = input.invitedEmail.trim().toLowerCase();
         const group = await db.getGroupById(input.groupId) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -516,12 +517,13 @@ export const appRouter = router({
         if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Verificar se o usuário existe
-        const invitedUser = await db.getUserByEmail(input.invitedEmail);
+        const invitedUser = await db.getUserByEmail(invitedEmail);
 
         const invitationId = await db.createInvitation({
           groupId: input.groupId,
           invitedBy: ctx.user.id!,
-          invitedEmail: input.invitedEmail,
+          invitedByOpenId: ctx.user.openId, // Firebase UID para regras de leitura direta
+          invitedEmail,
           invitedUserId: invitedUser?.id,
           status: "pending",
         });
@@ -542,7 +544,16 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserInvitations(ctx.user.id!);
+      const items = await db.getUserInvitations(ctx.user.id!);
+      const userEmail = ctx.user.email?.toLowerCase();
+      return items.map((inv: any) => {
+        const isPending = inv.status === "pending";
+        const isRecipientById = inv.invitedUserId && inv.invitedUserId === ctx.user.id;
+        const isRecipientByEmail = userEmail && typeof inv.invitedEmail === "string" && inv.invitedEmail.toLowerCase() === userEmail;
+        const canRespond = isPending && (isRecipientById || isRecipientByEmail);
+        const canCancel = isPending && inv.invitedBy === ctx.user.id!;
+        return { ...inv, canRespond, canCancel };
+      });
     }),
 
     respond: protectedProcedure
@@ -551,21 +562,28 @@ export const appRouter = router({
         accept: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const invitation = await db.getInvitationsByEmail(ctx.user.email || "") as any[];
-        const inv = invitation.find(i => i.id === input.id);
-        
+        const inv = await (db as any).getInvitationById?.(input.id);
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+        const userEmail = ctx.user.email?.toLowerCase();
+        const isRecipientById = inv.invitedUserId && inv.invitedUserId === ctx.user.id;
+        const isRecipientByEmail = userEmail && typeof inv.invitedEmail === "string" && inv.invitedEmail.toLowerCase() === userEmail;
+        if (!isRecipientById && !isRecipientByEmail) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
 
         const status = input.accept ? "accepted" : "rejected";
         await db.respondToInvitation(input.id, status);
 
         if (input.accept) {
           // Adicionar usuário ao grupo
-          await db.addGroupMember({
-            groupId: inv.groupId,
-            userId: ctx.user.id!,
-            role: "member",
-          });
+          const already = await db.isUserInGroup(ctx.user.id!, inv.groupId);
+          if (!already) {
+            await db.addGroupMember({
+              groupId: inv.groupId,
+              userId: ctx.user.id!,
+              role: "member",
+            });
+          }
 
           // Notificar quem convidou
           await db.createNotification({
@@ -578,6 +596,20 @@ export const appRouter = router({
           });
         }
 
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        // Buscar convites do usuário (enviados e recebidos) e validar permissão
+        const all = await db.getUserInvitations(ctx.user.id!);
+        const inv = all.find(i => i.id === input.id);
+        if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+        const userEmail = ctx.user.email;
+        const isOwner = inv.invitedBy === ctx.user.id!;
+        const isRecipient = userEmail && inv.invitedEmail === userEmail;
+        if (!isOwner && !isRecipient) throw new TRPCError({ code: "FORBIDDEN" });
+        await db.deleteInvitation(input.id);
         return { success: true };
       }),
   }),

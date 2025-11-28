@@ -5,11 +5,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Settings, Trash2, Users, MailPlus } from "lucide-react";
+import { Loader2, Plus, Settings, Trash2, Users, MailPlus, LogIn } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function Groups() {
   const { isAuthenticated } = useAuth();
@@ -19,6 +20,8 @@ export default function Groups() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
+  const { currentGroup, setCurrentGroupId } = useCurrentGroup();
+  const [, navigate] = useLocation();
 
   const { data: groups, isLoading, refetch } = trpc.groups.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -74,6 +77,11 @@ export default function Groups() {
     if (confirm("Tem certeza que deseja excluir este grupo?")) {
       deleteMutation.mutate({ id });
     }
+  };
+
+  const handleEnterGroup = (id: string) => {
+    setCurrentGroupId(id);
+    navigate("/shared-expenses");
   };
 
   if (isLoading) {
@@ -169,6 +177,15 @@ export default function Groups() {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="gap-1"
+                      variant={currentGroup?.id === item.group.id ? "secondary" : "default"}
+                      onClick={() => handleEnterGroup(item.group.id)}
+                    >
+                      <LogIn className="h-4 w-4" />
+                      Entrar
+                    </Button>
                     <Button asChild variant="ghost" size="icon">
                       <Link href={`/groups/${item.group.id}`}>
                         <Settings className="h-4 w-4" />

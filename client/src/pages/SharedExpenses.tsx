@@ -8,12 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { Loader2, Plus, Trash2, Pencil, CheckCircle2, Filter } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents, userLabel } from "@/lib/utils";
 
 export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
-  const [groupId, setGroupId] = useState<string | null>(null);
+  const { currentGroup, setCurrentGroupId } = useCurrentGroup();
+  const groupId = currentGroup?.id ?? null;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // centavos (input em centavos para manter lógica de splits)
@@ -37,9 +39,9 @@ export default function SharedExpenses() {
   // Seleciona automaticamente primeiro grupo
   useEffect(() => {
     if (!groupId && groups && groups.length > 0) {
-      setGroupId(groups[0].group.id);
+      setCurrentGroupId(groups[0].group.id);
     }
-  }, [groups, groupId]);
+  }, [groups, groupId, setCurrentGroupId]);
 
   const { data: expenses, isLoading, refetch } = trpc.sharedExpenses.list.useQuery(
     { groupId: groupId! },
@@ -166,7 +168,7 @@ export default function SharedExpenses() {
           <p className="text-muted-foreground">Gerencie despesas compartilhadas com seus grupos</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Select value={groupId ?? undefined} onValueChange={v => setGroupId(v)}>
+          <Select value={groupId ?? undefined} onValueChange={v => setCurrentGroupId(v)}>
             <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Selecione grupo" />
             </SelectTrigger>
@@ -265,7 +267,10 @@ export default function SharedExpenses() {
       {/* Dialog de edição */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Editar Despesa</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Editar Despesa</DialogTitle>
+            <DialogDescription>Atualize os campos necessários e salve as alterações</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2"><Label>Título</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
             <div className="space-y-2"><Label>Valor (centavos)</Label><Input value={amount} onChange={e => setAmount(e.target.value)} /></div>
@@ -282,7 +287,10 @@ export default function SharedExpenses() {
       {/* Dialog de detalhes */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Detalhes da Despesa</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Detalhes da Despesa</DialogTitle>
+            <DialogDescription>Veja valores, splits e status da despesa selecionada</DialogDescription>
+          </DialogHeader>
           {detailQuery.isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
           ) : detailQuery.data ? (

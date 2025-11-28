@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import SharedExpenses from "./pages/SharedExpenses";
 import Tasks from "./pages/Tasks";
 import FirebaseLogin from "./pages/FirebaseLogin";
+import { CurrentGroupProvider } from "./contexts/CurrentGroupContext";
 
 function Router() {
   return (
@@ -49,7 +50,9 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <CurrentGroupProvider>
+            <Router />
+          </CurrentGroupProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

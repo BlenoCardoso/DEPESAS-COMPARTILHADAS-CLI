@@ -40,16 +40,22 @@ const omitUndefined = <T extends Record<string, any>>(obj: T): T => {
 export async function upsertUser(user: User): Promise<void> {
   const db = adminDb();
   const snap = await db.collection("users").where("openId", "==", user.openId).limit(1).get();
-  const data = {
+  const hasEmailProp = Object.prototype.hasOwnProperty.call(user, "email");
+  const normalizedEmail = typeof user.email === "string"
+    ? user.email.toLowerCase()
+    : user.email ?? null;
+  const data: Record<string, any> = {
     openId: user.openId,
     name: user.name ?? null,
-    email: user.email ?? null,
     loginMethod: user.loginMethod ?? null,
     avatarUrl: user.avatarUrl ?? null,
     lastSignedIn: FieldValue.serverTimestamp(),
     role: user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user"),
     ...nowUpdate(),
   };
+  if (hasEmailProp) {
+    data.email = normalizedEmail;
+  }
   if (snap.empty) {
     await db.collection("users").add({ ...data, ...nowCreate() });
   } else {
@@ -76,7 +82,8 @@ export async function getUserById(id: string): Promise<User | undefined> {
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const db = adminDb();
-  const snap = await db.collection("users").where("email", "==", email).limit(1).get();
+  const normalized = email.toLowerCase();
+  const snap = await db.collection("users").where("email", "==", normalized).limit(1).get();
   if (snap.empty) return undefined;
   const doc = snap.docs[0];
   const data = normalize(doc.data());
@@ -130,8 +137,26 @@ export async function deleteGroup(id: string) {
 // ============ GROUP MEMBERS ============
 export async function addGroupMember(data: { groupId: string; userId: string; role: "owner" | "admin" | "member" }) {
   const db = adminDb();
-  // Top-level record (legacy/queries)
-  await db.collection("groupMembers").add({ ...data, joinedAt: FieldValue.serverTimestamp() });
+  const membersCol = db.collection("groupMembers");
+  const existing = await membersCol
+    .where("groupId", "==", data.groupId)
+    .where("userId", "==", data.userId)
+    .limit(1)
+    .get();
+
+  const basePayload = {
+    groupId: data.groupId,
+    userId: data.userId,
+    role: data.role,
+  };
+
+  if (existing.empty) {
+    await membersCol.add({ ...basePayload, joinedAt: FieldValue.serverTimestamp() });
+  } else {
+    const doc = existing.docs[0];
+    const joinedAt = doc.get("joinedAt") ?? FieldValue.serverTimestamp();
+    await doc.ref.set({ ...basePayload, joinedAt, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
   // Deterministic doc for security rules: groups/{groupId}/members/{userId}
   await db
     .collection("groups")
@@ -386,6 +411,18 @@ export async function updateInvitation(id: string, data: any) {
 export async function respondToInvitation(id: string, status: "accepted" | "rejected") {
   const db = adminDb();
   await db.collection("invitations").doc(id).set({ status, respondedAt: FieldValue.serverTimestamp(), ...nowUpdate() }, { merge: true });
+}
+
+export async function getInvitationById(id: string) {
+  const db = adminDb();
+  const doc = await db.collection("invitations").doc(id).get();
+  if (!doc.exists) return undefined;
+  return { id: doc.id, ...normalize(doc.data() || {}) };
+}
+
+export async function deleteInvitation(id: string) {
+  const db = adminDb();
+  await db.collection("invitations").doc(id).delete();
 }
 
 // ============ NOTIFICATIONS ============
