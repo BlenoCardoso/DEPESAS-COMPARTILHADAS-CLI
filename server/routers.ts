@@ -126,6 +126,7 @@ export const appRouter = router({
         currency: z.string().default("BRL"),
         category: z.string().optional(),
         date: z.date(),
+        allowMemberEdits: z.boolean().default(false),
         splits: z.array(z.object({
           userId: z.string(),
           amount: z.number().int().positive(),
@@ -146,6 +147,7 @@ export const appRouter = router({
           date: input.date,
           createdBy: ctx.user.id!,
           status: "pending",
+          allowMemberEdits: input.allowMemberEdits ?? false,
         });
 
         // Criar splits
@@ -224,11 +226,20 @@ export const appRouter = router({
         amount: z.number().int().positive().optional(),
         category: z.string().optional(),
         date: z.date().optional(),
+        allowMemberEdits: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const expense = await db.getSharedExpenseById(input.id) as any;
         if (!expense) throw new TRPCError({ code: "NOT_FOUND" });
-        if (expense.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const isOwner = expense.createdBy === ctx.user.id;
+        if (!isOwner) {
+          if (!expense.allowMemberEdits) throw new TRPCError({ code: "FORBIDDEN" });
+          const isMember = await db.isUserInGroup(ctx.user.id!, expense.groupId);
+          if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+          // Apenas o criador pode alterar a flag de permissão
+          if (input.allowMemberEdits !== undefined) throw new TRPCError({ code: "FORBIDDEN" });
+        }
 
         await db.updateSharedExpense(input.id, {
           title: input.title,
@@ -236,6 +247,7 @@ export const appRouter = router({
           amount: input.amount,
           category: input.category,
           date: input.date,
+          allowMemberEdits: input.allowMemberEdits,
         });
 
         return { success: true };

@@ -63,6 +63,7 @@ export interface SharedExpense {
   validatedBy?: string;
   validatedAt?: Timestamp;
   createdBy: string;
+  allowMemberEdits?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

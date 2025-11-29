@@ -22,10 +22,11 @@ export function useAuth(options?: UseAuthOptions) {
 
   // tRPC auth (fallback)
   const utils = trpc.useUtils();
+  const usingFirebase = isUsingFirebase();
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
-    enabled: !isUsingFirebase(), // Only query if not using Firebase
+    enabled: !usingFirebase || Boolean(firebaseUser),
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -36,7 +37,7 @@ export function useAuth(options?: UseAuthOptions) {
 
   // Firebase auth listener
   useEffect(() => {
-    if (!isUsingFirebase()) {
+    if (!usingFirebase) {
       setFirebaseLoading(false);
       return;
     }
@@ -93,7 +94,7 @@ export function useAuth(options?: UseAuthOptions) {
 
   // Login with Google (Firebase)
   const loginWithGoogle = useCallback(async () => {
-    if (!isUsingFirebase()) {
+    if (!usingFirebase) {
       // Fallback to original OAuth
       window.location.href = getLoginUrl();
       return;
@@ -114,6 +115,7 @@ export function useAuth(options?: UseAuthOptions) {
           credentials: 'include',
           body: JSON.stringify({ idToken }),
         });
+        await utils.auth.me.invalidate();
       } catch (err) {
         console.warn('[Auth] Failed to create server session after login', err);
       }
@@ -142,7 +144,7 @@ export function useAuth(options?: UseAuthOptions) {
 
   // Logout
   const logout = useCallback(async () => {
-    if (isUsingFirebase()) {
+    if (usingFirebase) {
       // Firebase logout
       setFirebaseLoading(true);
       try {
@@ -153,6 +155,7 @@ export function useAuth(options?: UseAuthOptions) {
         setFirebaseError(error);
       } finally {
         setFirebaseLoading(false);
+        utils.auth.me.setData(undefined, null);
       }
     } else {
       // tRPC logout
@@ -175,9 +178,10 @@ export function useAuth(options?: UseAuthOptions) {
 
   // Determine auth state
   const state = useMemo(() => {
-    if (isUsingFirebase()) {
+    if (usingFirebase) {
       // Firebase auth state
-      const user = firebaseUser ? {
+      const backendUser = meQuery.data ?? null;
+      const fallbackUser = firebaseUser ? {
         id: firebaseUser.uid,
         openId: firebaseUser.uid,
         name: firebaseUser.displayName,
@@ -185,11 +189,18 @@ export function useAuth(options?: UseAuthOptions) {
         avatarUrl: firebaseUser.photoURL,
         role: 'user' as const,
       } : null;
+      const user = backendUser ?? fallbackUser;
+
+      if (user) {
+        localStorage.setItem("manus-runtime-user-info", JSON.stringify(user));
+      } else {
+        localStorage.removeItem("manus-runtime-user-info");
+      }
 
       return {
         user,
-        loading: firebaseLoading,
-        error: firebaseError,
+        loading: firebaseLoading || meQuery.isLoading,
+        error: firebaseError ?? meQuery.error ?? null,
         isAuthenticated: Boolean(firebaseUser),
       };
     } else {
@@ -210,8 +221,8 @@ export function useAuth(options?: UseAuthOptions) {
     firebaseLoading,
     firebaseError,
     meQuery.data,
-    meQuery.error,
-    meQuery.isLoading,
+      meQuery.error,
+      meQuery.isLoading,
     logoutMutation.error,
     logoutMutation.isPending,
   ]);
@@ -236,8 +247,8 @@ export function useAuth(options?: UseAuthOptions) {
   return {
     ...state,
     refresh: () => {
-      if (isUsingFirebase()) {
-        // Firebase refreshes automatically
+      if (usingFirebase) {
+        meQuery.refetch();
       } else {
         meQuery.refetch();
       }

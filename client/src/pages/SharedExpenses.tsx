@@ -1,16 +1,18 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Trash2, Pencil, CheckCircle2, Filter } from "lucide-react";
+import { Loader2, Plus, Trash2, Pencil, CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
-import { formatCents, parseReaisToCents, userLabel } from "@/lib/utils";
+import { formatCents, userLabel } from "@/lib/utils";
 
 export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
@@ -21,6 +23,7 @@ export default function SharedExpenses() {
   const [amount, setAmount] = useState(""); // centavos (input em centavos para manter lógica de splits)
   const [category, setCategory] = useState("");
   const [date, setDate] = useState<string>(() => new Date().toISOString().substring(0, 10));
+  const [allowMemberEdits, setAllowMemberEdits] = useState(false);
   // filtros
   const [filterText, setFilterText] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -33,6 +36,7 @@ export default function SharedExpenses() {
   // detalhes
   const [detailId, setDetailId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailAllowMemberEdits, setDetailAllowMemberEdits] = useState(false);
 
   const { data: groups } = trpc.groups.list.useQuery(undefined, { enabled: isAuthenticated });
 
@@ -65,6 +69,7 @@ export default function SharedExpenses() {
       setTitle("");
       setAmount("");
       setCategory("");
+      setAllowMemberEdits(false);
       refetch();
     },
     onError: e => toast.error(e.message),
@@ -80,6 +85,15 @@ export default function SharedExpenses() {
 
   const updateMutation = trpc.sharedExpenses.update.useMutation({
     onSuccess: () => { toast.success("Despesa atualizada"); setIsEditOpen(false); refetch(); },
+    onError: e => toast.error(e.message),
+  });
+
+  const permissionMutation = trpc.sharedExpenses.update.useMutation({
+    onSuccess: () => {
+      toast.success("Preferência atualizada");
+      detailQuery.refetch();
+      refetch();
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -119,6 +133,7 @@ export default function SharedExpenses() {
       date: new Date(date + 'T00:00:00'),
       currency: "BRL",
       category: category || undefined,
+      allowMemberEdits,
       // description omitida para evitar envio de undefined
       splits,
     });
@@ -136,13 +151,24 @@ export default function SharedExpenses() {
     setAmount(String(row.expense.amount));
     setCategory(row.expense.category || "");
     setDate(new Date(row.expense.date).toISOString().substring(0,10));
+    setAllowMemberEdits(Boolean(row.expense.allowMemberEdits));
     setIsEditOpen(true);
   };
 
   const handleUpdate = () => {
     if (!editing) return;
     const amt = parseInt(amount, 10);
-    updateMutation.mutate({ id: editing.expense.id, title: title || undefined, amount: isNaN(amt)? undefined : amt, category: category || undefined, date: new Date(date + 'T00:00:00') });
+    const payload: any = {
+      id: editing.expense.id,
+      title: title || undefined,
+      amount: isNaN(amt) ? undefined : amt,
+      category: category || undefined,
+      date: new Date(date + 'T00:00:00'),
+    };
+    if (editing.expense.createdBy === user?.id) {
+      payload.allowMemberEdits = allowMemberEdits;
+    }
+    updateMutation.mutate(payload);
   };
 
   const openDetail = (row: any) => {
@@ -159,6 +185,12 @@ export default function SharedExpenses() {
     if (filterEnd) list = list.filter(e => new Date(e.expense.date) <= new Date(filterEnd));
     return list;
   }, [expenses, filterText, filterCategory, filterStatus, filterStart, filterEnd]);
+
+  useEffect(() => {
+    if (detailQuery.data) {
+      setDetailAllowMemberEdits(Boolean(detailQuery.data.expense.allowMemberEdits));
+    }
+  }, [detailQuery.data]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -178,7 +210,13 @@ export default function SharedExpenses() {
               ))}
             </SelectContent>
           </Select>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={open => {
+              setIsCreateOpen(open);
+              if (!open) setAllowMemberEdits(false);
+            }}
+          >
             <DialogTrigger asChild>
               <Button disabled={!groupId} className="gap-2">
                 <Plus className="h-4 w-4" /> Nova Despesa
@@ -205,6 +243,13 @@ export default function SharedExpenses() {
                 <div className="space-y-2">
                   <Label>Data</Label>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <Label className="text-sm">Permitir que membros editem</Label>
+                    <p className="text-xs text-muted-foreground">Quando ativo, qualquer membro poderá alterar esta despesa.</p>
+                  </div>
+                  <Switch checked={allowMemberEdits} onCheckedChange={setAllowMemberEdits} />
                 </div>
                 {splits.length > 0 && (
                   <Card className="border-dashed">
@@ -276,6 +321,15 @@ export default function SharedExpenses() {
             <div className="space-y-2"><Label>Valor (centavos)</Label><Input value={amount} onChange={e => setAmount(e.target.value)} /></div>
             <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
             <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+            {editing?.expense.createdBy === user?.id && (
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <Label className="text-sm">Permitir que membros editem</Label>
+                  <p className="text-xs text-muted-foreground">Membros poderão alterar campos como título e valor.</p>
+                </div>
+                <Switch checked={allowMemberEdits} onCheckedChange={setAllowMemberEdits} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
@@ -285,7 +339,13 @@ export default function SharedExpenses() {
       </Dialog>
 
       {/* Dialog de detalhes */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+      <Dialog
+        open={isDetailOpen}
+        onOpenChange={open => {
+          setIsDetailOpen(open);
+          if (!open) setDetailId(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Detalhes da Despesa</DialogTitle>
@@ -301,6 +361,33 @@ export default function SharedExpenses() {
                 <div className="flex justify-between"><span>Categoria</span><span>{detailQuery.data.expense.category || 'Sem'}</span></div>
                 <div className="flex justify-between"><span>Data</span><span>{new Date(detailQuery.data.expense.date).toLocaleDateString('pt-BR')}</span></div>
                 <div className="flex justify-between"><span>Status</span><span className="capitalize">{detailQuery.data.expense.status}</span></div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 text-sm">
+                <div>
+                  <p className="font-medium">Edição por membros</p>
+                  <p className="text-xs text-muted-foreground">Controla se outras pessoas do grupo podem atualizar os dados.</p>
+                </div>
+                {detailQuery.data.expense.createdBy === user?.id ? (
+                  <Switch
+                    checked={detailAllowMemberEdits}
+                    disabled={permissionMutation.isPending}
+                    onCheckedChange={next => {
+                      const previous = detailAllowMemberEdits;
+                      setDetailAllowMemberEdits(next);
+                      if (!detailId) return;
+                      permissionMutation.mutate(
+                        { id: detailId, allowMemberEdits: next },
+                        {
+                          onError: () => setDetailAllowMemberEdits(previous),
+                        }
+                      );
+                    }}
+                  />
+                ) : (
+                  <span className="font-semibold text-xs">
+                    {detailAllowMemberEdits ? "Liberada" : "Restrita"}
+                  </span>
+                )}
               </div>
               <Card>
                 <CardHeader className="py-3"><CardTitle className="text-sm">Splits</CardTitle><CardDescription>Participantes e valores</CardDescription></CardHeader>
@@ -338,27 +425,40 @@ export default function SharedExpenses() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredExpenses.map(e => (
-            <Card key={e.expense.id} className="relative">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex justify-between items-start">
-                  <span className="cursor-pointer underline-offset-2 hover:underline" onClick={() => openDetail(e)}>{e.expense.title}</span>
-                  <span className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => startEdit(e)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(e.expense.id)} disabled={deleteMutation.isPending}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </span>
-                </CardTitle>
-                <CardDescription>{e.expense.category || 'Sem categoria'}</CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <div className="flex justify-between"><span>Valor total</span><span className="font-medium">{formatCents(e.expense.amount)}</span></div>
-                <div className="flex justify-between"><span>Data</span><span>{new Date(e.expense.date).toLocaleDateString('pt-BR')}</span></div>
-                <div className="flex justify-between"><span>Status</span><span className="capitalize">{e.expense.status}</span></div>
-              </CardContent>
-            </Card>
-          ))}
+          {filteredExpenses.map(e => {
+            const isOwner = e.expense.createdBy === user?.id;
+            const canEdit = isOwner || (!!e.expense.allowMemberEdits && !!user?.id);
+            return (
+              <Card key={e.expense.id} className="relative">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex justify-between items-start">
+                    <span className="cursor-pointer underline-offset-2 hover:underline" onClick={() => openDetail(e)}>{e.expense.title}</span>
+                    <span className="flex gap-1">
+                      {canEdit && (
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(e)}><Pencil className="h-4 w-4" /></Button>
+                      )}
+                      {isOwner && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(e.expense.id)} disabled={deleteMutation.isPending}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </span>
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-2">
+                    {e.expense.category || 'Sem categoria'}
+                    <Badge variant={e.expense.allowMemberEdits ? "secondary" : "outline"} className="text-[11px]">
+                      {e.expense.allowMemberEdits ? "Edição liberada" : "Somente criador"}
+                    </Badge>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <div className="flex justify-between"><span>Valor total</span><span className="font-medium">{formatCents(e.expense.amount)}</span></div>
+                  <div className="flex justify-between"><span>Data</span><span>{new Date(e.expense.date).toLocaleDateString('pt-BR')}</span></div>
+                  <div className="flex justify-between"><span>Status</span><span className="capitalize">{e.expense.status}</span></div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

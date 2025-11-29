@@ -31,9 +31,14 @@ service cloud.firestore {
     match /sharedExpenses/{expenseId} {
       allow read: if isMemberOfGroup(resource.data.groupId);
       allow create: if isAuthenticated() && isMemberOfGroup(request.resource.data.groupId);
-      allow update: if isAuthenticated() &&
-                     (resource.data.createdBy == request.auth.uid ||
-                      isMemberOfGroup(resource.data.groupId));
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        (
+          resource.data.allowMemberEdits == true &&
+          request.resource.data.allowMemberEdits == resource.data.allowMemberEdits &&
+          isMemberOfGroup(resource.data.groupId)
+        )
+      );
       allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
     }
 
