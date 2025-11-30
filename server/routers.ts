@@ -108,10 +108,16 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const group = await db.getGroupById(input.groupId) as any;
         if (!group) throw new TRPCError({ code: "NOT_FOUND" });
-        if (group.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        const isOwner = group.ownerId === ctx.user.id;
+        const isSelfRemoval = ctx.user.id === input.userId;
+
+        if (!isOwner && !isSelfRemoval) throw new TRPCError({ code: "FORBIDDEN" });
+        if (input.userId === group.ownerId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "O proprietário não pode ser removido" });
+        }
 
         await db.removeGroupMember(input.groupId, input.userId);
-        return { success: true };
+        return { success: true, removedUserId: input.userId };
       }),
   }),
 

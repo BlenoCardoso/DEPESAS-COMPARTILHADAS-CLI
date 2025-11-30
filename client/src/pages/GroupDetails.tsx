@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { translateMemberRole, userLabel } from "@/lib/utils";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -9,12 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Trash2, UserMinus, MailPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface GroupDetailsProps { groupId: string }
 
 export default function GroupDetails({ groupId }: GroupDetailsProps) {
   const { user } = useAuth();
+  const { setCurrentGroupId } = useCurrentGroup();
+  const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
   const [editingOpen, setEditingOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState("");
@@ -31,7 +35,20 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
     onError: e => toast.error(e.message),
   });
   const removeMemberMutation = trpc.groups.removeMember.useMutation({
-    onSuccess: () => { toast.success("Membro removido"); membersQuery.refetch(); },
+    onSuccess: () => {
+      toast.success("Membro removido");
+      membersQuery.refetch();
+      utils.groups.list.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const leaveGroupMutation = trpc.groups.removeMember.useMutation({
+    onSuccess: () => {
+      toast.success("Você saiu do grupo");
+      setCurrentGroupId(null);
+      utils.groups.list.invalidate();
+      setLocation("/groups");
+    },
     onError: e => toast.error(e.message),
   });
   const inviteMutation = trpc.invitations.create.useMutation({
@@ -54,6 +71,11 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
   const handleRemove = (userId: string) => {
     if (!confirm("Remover membro?")) return;
     removeMemberMutation.mutate({ groupId, userId });
+  };
+  const handleLeave = () => {
+    if (!user?.id) return;
+    if (!confirm("Tem certeza de que deseja sair deste grupo?")) return;
+    leaveGroupMutation.mutate({ groupId, userId: user.id });
   };
   const handleInvite = () => {
     if (!inviteEmail.trim()) { toast.error("Email obrigatório"); return; }
@@ -80,6 +102,11 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <div className="flex gap-2">
           {canEdit && <Button variant="outline" onClick={() => setInviteOpen(true)}><MailPlus className="h-4 w-4 mr-2" />Convidar</Button>}
           {canEdit && <Button onClick={() => setEditingOpen(true)}>Editar</Button>}
+          {!canEdit && (
+            <Button variant="destructive" onClick={handleLeave} disabled={leaveGroupMutation.isPending}>
+              {leaveGroupMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Sair do grupo
+            </Button>
+          )}
           <Link href="/groups"><Button variant="ghost">Voltar</Button></Link>
         </div>
       </div>
