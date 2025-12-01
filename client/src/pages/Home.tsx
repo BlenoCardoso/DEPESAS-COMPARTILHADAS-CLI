@@ -16,6 +16,8 @@ export default function Home() {
 
   const { data: unreadCount } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
   const { data: notifications } = trpc.notifications.list.useQuery(undefined, {
     enabled: isAuthenticated,

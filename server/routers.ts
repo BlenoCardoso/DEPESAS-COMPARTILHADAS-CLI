@@ -643,9 +643,9 @@ export const appRouter = router({
       }),
 
     markAsRead: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        await db.markNotificationAsRead(input.id as any);
+        await db.markNotificationAsRead(input.id);
         return { success: true };
       }),
 
