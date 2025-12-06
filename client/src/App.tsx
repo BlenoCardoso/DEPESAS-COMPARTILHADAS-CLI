@@ -1,24 +1,26 @@
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MobileLayout from "./components/MobileLayout";
+import SplashScreen from "./components/SplashScreen";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { CurrentGroupProvider } from "./contexts/CurrentGroupContext";
 import Calendar from "./pages/Calendar";
-import Groups from "./pages/Groups";
+import FirebaseLogin from "./pages/FirebaseLogin";
 import GroupDetails from "./pages/GroupDetails";
+import Groups from "./pages/Groups";
 import Home from "./pages/Home";
+import Invitations from "./pages/Invitations";
 import Notifications from "./pages/Notifications";
 import PersonalExpenses from "./pages/PersonalExpenses";
 import Reminders from "./pages/Reminders";
 import Reports from "./pages/Reports";
-import Invitations from "./pages/Invitations";
 import Settings from "./pages/Settings";
 import SharedExpenses from "./pages/SharedExpenses";
 import Tasks from "./pages/Tasks";
-import FirebaseLogin from "./pages/FirebaseLogin";
-import { CurrentGroupProvider } from "./contexts/CurrentGroupContext";
 
 function Router() {
   return (
@@ -45,13 +47,20 @@ function Router() {
 }
 
 function App() {
+  const [isBooting, setIsBooting] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsBooting(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <CurrentGroupProvider>
-            <Router />
+            {isBooting ? <SplashScreen /> : <Router />}
           </CurrentGroupProvider>
         </TooltipProvider>
       </ThemeProvider>

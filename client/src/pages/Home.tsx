@@ -123,17 +123,15 @@ export default function Home() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Olá, {user?.name?.split(" ")[0]}! 👋</h1>
-        <p className="text-muted-foreground">
-          Bem-vindo de volta ao seu painel de controle
-        </p>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Olá, {user?.name?.split(" ")[0]}! 👋</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">Bem-vindo de volta ao seu painel de controle</p>
       </div>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
         <Link href="/groups">
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-primary">
+          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Meus Grupos</CardTitle>
               <Users className="h-5 w-5 text-primary" />
@@ -148,7 +146,7 @@ export default function Home() {
         </Link>
 
         <Link href="/shared-expenses">
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-secondary">
+          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Despesas Compartilhadas</CardTitle>
               <CreditCard className="h-5 w-5 text-secondary" />
@@ -167,7 +165,7 @@ export default function Home() {
         </Link>
 
         <Link href="/personal-expenses">
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-accent">
+          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Despesas Pessoais</CardTitle>
               <Wallet className="h-5 w-5 text-accent" />
@@ -186,7 +184,7 @@ export default function Home() {
         </Link>
 
         <Link href="/notifications">
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-info">
+          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Notificações</CardTitle>
               <div className="h-5 w-5 rounded-full bg-info flex items-center justify-center text-xs text-white font-bold">
@@ -207,12 +205,12 @@ export default function Home() {
       </div>
 
       {/* Ações rápidas */}
-          <Card>
+      <Card className="rounded-2xl border border-border/70">
         <CardHeader>
           <CardTitle>Ações Rápidas</CardTitle>
           <CardDescription>Acesse rapidamente as funcionalidades principais</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3">
+        <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
           <Button asChild variant="outline" className="w-full justify-start gap-2">
             <Link href="/groups">
               <Users className="h-4 w-4" />

@@ -33,14 +33,14 @@ export default function Reminders() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Lembretes</h1>
-          <p className="text-muted-foreground">Gerencie seus lembretes</p>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
+          <p className="text-sm text-muted-foreground">Gerencie seus lembretes</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" /> Novo</Button>
+            <Button className="gap-2 w-full sm:w-auto"><Plus className="h-4 w-4" /> Novo</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -62,11 +62,11 @@ export default function Reminders() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
       ) : !reminders || reminders.length === 0 ? (
-        <Card><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhum lembrete</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeiro</Button></CardContent></Card>
+        <Card className="rounded-2xl border border-border/70"><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhum lembrete</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeiro</Button></CardContent></Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
             {(reminders as any[]).map(r => (
-            <Card key={r.id}>
+            <Card key={r.id} className="rounded-2xl border border-border/70">
               <CardHeader className="pb-2"><CardTitle className="flex justify-between text-lg"><span>{r.title}</span><Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button></CardTitle><CardDescription>{r.category || 'Sem categoria'}</CardDescription></CardHeader>
               <CardContent className="text-sm space-y-1">
                 <div className="flex justify-between"><span>Data</span><span>{new Date(r.reminderDate).toLocaleString('pt-BR')}</span></div>

@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Trash2, Pencil, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Pencil, CheckCircle2, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
 import { formatCents, userLabel } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useMobile";
 
 export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
@@ -37,6 +38,8 @@ export default function SharedExpenses() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailAllowMemberEdits, setDetailAllowMemberEdits] = useState(false);
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: groups } = trpc.groups.list.useQuery(undefined, { enabled: isAuthenticated });
 
@@ -194,117 +197,125 @@ export default function SharedExpenses() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Despesas Compartilhadas</h1>
-          <p className="text-muted-foreground">Gerencie despesas compartilhadas com seus grupos</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Select value={groupId ?? undefined} onValueChange={v => setCurrentGroupId(v)}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Selecione grupo" />
-            </SelectTrigger>
-            <SelectContent>
-              {groups?.map(g => (
-                <SelectItem key={g.group.id} value={g.group.id}>{g.group.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Dialog
-            open={isCreateOpen}
-            onOpenChange={open => {
-              setIsCreateOpen(open);
-              if (!open) setAllowMemberEdits(false);
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button disabled={!groupId} className="gap-2">
-                <Plus className="h-4 w-4" /> Nova Despesa
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Nova Despesa</DialogTitle>
-                <DialogDescription>Divisão automática entre membros do grupo</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Título *</Label>
-                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Mercado" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor (centavos) *</Label>
-                  <Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 2599" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="Ex: Alimentação" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Data</Label>
-                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-                </div>
-                <div className="flex items-center justify-between rounded-md border p-3">
-                  <div>
-                    <Label className="text-sm">Permitir que membros editem</Label>
-                    <p className="text-xs text-muted-foreground">Quando ativo, qualquer membro poderá alterar esta despesa.</p>
-                  </div>
-                  <Switch checked={allowMemberEdits} onCheckedChange={setAllowMemberEdits} />
-                </div>
-                {splits.length > 0 && (
-                  <Card className="border-dashed">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Divisão</CardTitle>
-                      <CardDescription className="text-xs">Valor por usuário (centavos)</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-2 gap-2 text-xs">
-                      {splits.map(s => (
-                        <div key={s.userId} className="flex justify-between">
-                          <span>{userLabel(membersQuery.data?.find(m => m.user.id === s.userId)?.user, user || undefined) || s.userId}</span>
-                          <span className="font-medium">{s.amount}</span>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Criar
+      <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold sm:text-3xl">Despesas Compartilhadas</h1>
+            <p className="text-sm text-muted-foreground">Gerencie despesas compartilhadas com seus grupos</p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            <Select value={groupId ?? undefined} onValueChange={v => setCurrentGroupId(v)}>
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Selecione grupo" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups?.map(g => (
+                  <SelectItem key={g.group.id} value={g.group.id}>{g.group.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Dialog
+              open={isCreateOpen}
+              onOpenChange={open => {
+                setIsCreateOpen(open);
+                if (!open) setAllowMemberEdits(false);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button disabled={!groupId} className="w-full gap-2 sm:w-auto">
+                  <Plus className="h-4 w-4" /> Nova Despesa
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          {/* Filtros */}
-          <div className="flex gap-2 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Busca</Label>
-              <Input value={filterText} onChange={e => setFilterText(e.target.value)} placeholder="Titulo" className="w-[140px]" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Categoria</Label>
-              <Input value={filterCategory} onChange={e => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-[120px]" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
-              <Select value={filterStatus || undefined} onValueChange={v => setFilterStatus(v === 'all' ? '' : v)}>
-                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Todos" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="validated">Validada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Início</Label>
-              <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-[130px]" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Fim</Label>
-              <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="w-[130px]" />
-            </div>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nova Despesa</DialogTitle>
+                  <DialogDescription>Divisão automática entre membros do grupo</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label>Título *</Label>
+                    <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Mercado" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor (centavos) *</Label>
+                    <Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 2599" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="Ex: Alimentação" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data</Label>
+                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <Label className="text-sm">Permitir que membros editem</Label>
+                      <p className="text-xs text-muted-foreground">Quando ativo, qualquer membro poderá alterar esta despesa.</p>
+                    </div>
+                    <Switch checked={allowMemberEdits} onCheckedChange={setAllowMemberEdits} />
+                  </div>
+                  {splits.length > 0 && (
+                    <Card className="border-dashed">
+                      <CardHeader>
+                        <CardTitle className="text-sm">Divisão</CardTitle>
+                        <CardDescription className="text-xs">Valor por usuário (centavos)</CardDescription>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-2 text-xs">
+                        {splits.map(s => (
+                          <div key={s.userId} className="flex justify-between">
+                            <span>{userLabel(membersQuery.data?.find(m => m.user.id === s.userId)?.user, user || undefined) || s.userId}</span>
+                            <span className="font-medium">{s.amount}</span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+                  <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                    {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Criar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Button
+              variant="outline"
+              className="w-full gap-2 sm:hidden"
+              onClick={() => setFiltersOpen(prev => !prev)}
+            >
+              <SlidersHorizontal className="h-4 w-4" /> {filtersOpen ? "Ocultar filtros" : "Filtros"}
+            </Button>
+          </div>
+        </div>
+        <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${isMobile && !filtersOpen ? "hidden" : ""}`}>
+          <div className="space-y-1">
+            <Label className="text-xs">Busca</Label>
+            <Input value={filterText} onChange={e => setFilterText(e.target.value)} placeholder="Título" className="w-full" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Categoria</Label>
+            <Input value={filterCategory} onChange={e => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select value={filterStatus || undefined} onValueChange={v => setFilterStatus(v === 'all' ? '' : v)}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="validated">Validada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Início</Label>
+            <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-full" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Fim</Label>
+            <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="w-full" />
           </div>
         </div>
       </div>

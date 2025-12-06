@@ -94,14 +94,14 @@ export default function Groups() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Meus Grupos</h1>
-          <p className="text-muted-foreground">Gerencie seus grupos compartilhados</p>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Meus Grupos</h1>
+          <p className="text-sm text-muted-foreground">Gerencie seus grupos compartilhados</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Novo Grupo
             </Button>
@@ -148,7 +148,7 @@ export default function Groups() {
       </div>
 
       {groups && groups.length === 0 ? (
-        <Card>
+        <Card className="rounded-2xl border border-border/70">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-16 w-16 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Nenhum grupo ainda</h3>
@@ -162,9 +162,9 @@ export default function Groups() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
           {groups?.map((item) => (
-            <Card key={item.group.id} className="hover:shadow-lg transition-all">
+            <Card key={item.group.id} className="rounded-2xl border border-border/70 transition-all hover:shadow-lg">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -176,7 +176,7 @@ export default function Groups() {
                       <CardDescription className="mt-2">{item.group.description}</CardDescription>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       className="gap-1"
@@ -186,7 +186,7 @@ export default function Groups() {
                       <LogIn className="h-4 w-4" />
                       Entrar
                     </Button>
-                    <Button asChild variant="ghost" size="icon">
+                    <Button asChild variant="ghost" size="icon" className="rounded-xl border border-border/60">
                       <Link href={`/groups/${item.group.id}`}>
                         <Settings className="h-4 w-4" />
                       </Link>

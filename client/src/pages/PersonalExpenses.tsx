@@ -69,14 +69,14 @@ export default function PersonalExpenses() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Despesas Pessoais</h1>
-          <p className="text-muted-foreground">Gerencie suas despesas pessoais</p>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Despesas Pessoais</h1>
+          <p className="text-sm text-muted-foreground">Gerencie suas despesas pessoais</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" /> Nova</Button>
+            <Button className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Nova</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -117,12 +117,12 @@ export default function PersonalExpenses() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
       ) : !expenses || expenses.length === 0 ? (
-        <Card><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhuma despesa</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeira</Button></CardContent></Card>
+        <Card className="rounded-2xl border border-border/70"><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhuma despesa</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeira</Button></CardContent></Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
           {(expenses as any[]).map(e => (
-            <Card key={e.id}>
-              <CardHeader className="pb-2"><CardTitle className="text-lg flex justify-between"><span>{(e as any).title}</span><span className="flex gap-1"> <Button variant="ghost" size="icon" onClick={() => startEdit(e)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDelete(e.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button></span></CardTitle><CardDescription>{(e as any).category || 'Sem categoria'}</CardDescription></CardHeader>
+            <Card key={e.id} className="rounded-2xl border border-border/70">
+              <CardHeader className="pb-2"><CardTitle className="text-lg flex justify-between"><span>{(e as any).title}</span><span className="flex gap-1"> <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => startEdit(e)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="rounded-xl" onClick={() => handleDelete(e.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button></span></CardTitle><CardDescription>{(e as any).category || 'Sem categoria'}</CardDescription></CardHeader>
               <CardContent className="text-sm space-y-1">
                 <div className="flex justify-between"><span>Valor</span><span className="font-medium">{formatCents((e as any).amount)}</span></div>
                 <div className="flex justify-between"><span>Data</span><span>{(e as any).date ? new Date((e as any).date).toLocaleDateString('pt-BR') : '-'}</span></div>
