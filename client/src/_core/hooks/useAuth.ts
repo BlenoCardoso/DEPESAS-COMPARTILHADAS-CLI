@@ -1,15 +1,29 @@
 import { getLoginUrl, isUsingFirebase } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
+import { Capacitor } from "@capacitor/core";
+import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 import { useCallback, useEffect, useMemo, useState } from "react";
 // Firebase (usar imports estáticos para garantir listener imediato)
 import { auth, googleProvider } from "@/lib/firebase";
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithCredential,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from "firebase/auth";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
   redirectPath?: string;
 };
+
+const googleWebClientId =
+  import.meta.env.VITE_FIREBASE_WEB_CLIENT_ID ||
+  import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID ||
+  "";
 
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
@@ -93,6 +107,40 @@ export function useAuth(options?: UseAuthOptions) {
   }, []);
 
   // Login with Google (Firebase)
+  const performNativeGoogleSignIn = useCallback(async () => {
+    console.log('[Firebase Auth] Native Google sign-in requested');
+    if (!googleWebClientId) {
+      throw new Error('VITE_FIREBASE_WEB_CLIENT_ID não configurado no build');
+    }
+
+    try {
+      await GoogleAuth.initialize({
+        clientId: googleWebClientId,
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: false,
+      });
+    } catch (err) {
+      console.warn('[Firebase Auth] GoogleAuth already initialized or unavailable', err);
+    }
+
+    try {
+      await GoogleAuth.signOut();
+    } catch (err) {
+      console.warn('[Firebase Auth] Could not clear previous Google session', err);
+    }
+
+    const response = await GoogleAuth.signIn();
+    const idToken = response?.authentication?.idToken;
+    if (!idToken) {
+      console.error('[Firebase Auth] Native Google sign-in did not return an ID token', response);
+      throw new Error('Falha ao obter token do Google');
+    }
+
+    const credential = GoogleAuthProvider.credential(idToken);
+    await signInWithCredential(auth, credential);
+    console.log('[Firebase Auth] Native Google credential enviada ao Firebase');
+  }, []);
+
   const loginWithGoogle = useCallback(async () => {
     if (!usingFirebase) {
       // Fallback to original OAuth
@@ -104,6 +152,11 @@ export function useAuth(options?: UseAuthOptions) {
     setFirebaseError(null);
     
     try {
+      const isNative = Capacitor?.isNativePlatform?.() ?? false;
+      if (isNative) {
+        await performNativeGoogleSignIn();
+        return;
+      }
       const result = await signInWithPopup(auth, googleProvider);
       console.log('[Firebase Auth] Login successful:', result.user.email);
       // Immediately sync session cookie
@@ -140,7 +193,7 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       setFirebaseLoading(false);
     }
-  }, []);
+  }, [performNativeGoogleSignIn, usingFirebase, utils.auth.me]);
 
   // Logout
   const logout = useCallback(async () => {
