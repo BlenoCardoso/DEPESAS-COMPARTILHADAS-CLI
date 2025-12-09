@@ -1,0 +1,90 @@
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isMemberOfGroup(groupId) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    match /groups/{groupId} {
+      allow read: if isMemberOfGroup(groupId) || resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /sharedExpenses/{expenseId} {
+      allow read: if isMemberOfGroup(resource.data.groupId);
+      allow create: if isAuthenticated() && isMemberOfGroup(request.resource.data.groupId);
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        (
+          resource.data.allowMemberEdits == true &&
+          request.resource.data.allowMemberEdits == resource.data.allowMemberEdits &&
+          isMemberOfGroup(resource.data.groupId)
+        )
+      );
+      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /expenseSplits/{splitId} {
+      allow read: if isAuthenticated() &&
+                   (resource.data.userId == request.auth.uid ||
+                    isMemberOfGroup(resource.data.groupId));
+      allow create, update, delete: if isAuthenticated() &&
+                   (request.resource.data.userId == request.auth.uid ||
+                    isMemberOfGroup(request.resource.data.groupId));
+    }
+
+    match /personalExpenses/{expenseId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+
+    match /reminders/{reminderId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+
+    match /calendarEvents/{eventId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+
+    match /invitations/{invitationId} {
+      allow read: if isAuthenticated() &&
+                   (
+                     resource.data.invitedEmail == request.auth.token.email ||
+                     resource.data.invitedByOpenId == request.auth.uid
+                   );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+                    resource.data.invitedEmail == request.auth.token.email;
+      allow delete: if isAuthenticated() &&
+                    (
+                      resource.data.invitedByOpenId == request.auth.uid ||
+                      resource.data.invitedEmail == request.auth.token.email
+                    );
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+  }
+}
