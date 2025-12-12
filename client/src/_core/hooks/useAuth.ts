@@ -13,6 +13,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  type User as FirebaseUser,
 } from "firebase/auth";
 
 type UseAuthOptions = {
@@ -26,6 +27,7 @@ const googleWebClientId =
   "";
 
 let loginInProgress: Promise<void> | null = null;
+let sessionSyncInProgress: Promise<void> | null = null;
 
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
@@ -35,6 +37,7 @@ export function useAuth(options?: UseAuthOptions) {
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [firebaseLoading, setFirebaseLoading] = useState(true);
   const [firebaseError, setFirebaseError] = useState<Error | null>(null);
+  const [sessionSynced, setSessionSynced] = useState(false);
 
   // tRPC auth (fallback)
   const utils = trpc.useUtils();
@@ -42,7 +45,7 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
-    enabled: !usingFirebase || Boolean(firebaseUser),
+    enabled: !usingFirebase || (Boolean(firebaseUser) && sessionSynced),
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -51,10 +54,55 @@ export function useAuth(options?: UseAuthOptions) {
     },
   });
 
+  const syncServerSession = useCallback(
+    async (user: FirebaseUser | null, options?: { forceRefresh?: boolean }) => {
+      if (!usingFirebase) {
+        setSessionSynced(true);
+        return;
+      }
+
+      if (!user) {
+        setSessionSynced(false);
+        return;
+      }
+
+      if (sessionSyncInProgress) {
+        return sessionSyncInProgress;
+      }
+
+      sessionSyncInProgress = (async () => {
+        try {
+          const idToken = await user.getIdToken(options?.forceRefresh ?? true);
+          await fetch('/api/auth/firebase/session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            credentials: 'include',
+            body: JSON.stringify({ idToken }),
+          });
+          setSessionSynced(true);
+          await utils.auth.me.invalidate();
+        } catch (err) {
+          setSessionSynced(false);
+          console.warn('[Auth] Failed to sync server session', err);
+          throw err;
+        } finally {
+          sessionSyncInProgress = null;
+        }
+      })();
+
+      return sessionSyncInProgress;
+    },
+    [usingFirebase, utils.auth.me]
+  );
+
   // Firebase auth listener
   useEffect(() => {
     if (!usingFirebase) {
       setFirebaseLoading(false);
+      setSessionSynced(true);
       return;
     }
 
@@ -64,6 +112,9 @@ export function useAuth(options?: UseAuthOptions) {
         setFirebaseUser(user);
         setFirebaseLoading(false);
         setFirebaseError(null);
+        if (!user) {
+          setSessionSynced(false);
+        }
         
         // Persist user info for Manus Runtime
         if (user) {
@@ -78,22 +129,9 @@ export function useAuth(options?: UseAuthOptions) {
               role: 'user',
             })
           );
-
-          // Ensure backend session cookie exists for tRPC protected routes
-          // We call our server to exchange the Firebase ID token for a cookie.
-          (async () => {
-            try {
-              const idToken = await user.getIdToken(true);
-              await fetch('/api/auth/firebase/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ idToken }),
-              });
-            } catch (err) {
-              console.warn('[Auth] Failed to sync server session', err);
-            }
-          })();
+          syncServerSession(user).catch(() => {
+            /* handled via state */
+          });
         } else {
           localStorage.removeItem("manus-runtime-user-info");
         }
@@ -106,7 +144,7 @@ export function useAuth(options?: UseAuthOptions) {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [syncServerSession, usingFirebase]);
 
   // Login with Google (Firebase)
   const performNativeGoogleSignIn = useCallback(async () => {
@@ -168,14 +206,7 @@ export function useAuth(options?: UseAuthOptions) {
         console.log('[Firebase Auth] Login successful:', result.user.email);
         // Immediately sync session cookie
         try {
-          const idToken = await result.user.getIdToken(true);
-          await fetch('/api/auth/firebase/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ idToken }),
-          });
-          await utils.auth.me.invalidate();
+          await syncServerSession(result.user);
         } catch (err) {
           console.warn('[Auth] Failed to create server session after login', err);
         }
@@ -226,6 +257,7 @@ export function useAuth(options?: UseAuthOptions) {
         setFirebaseError(error);
       } finally {
         setFirebaseLoading(false);
+        setSessionSynced(false);
         utils.auth.me.setData(undefined, null);
       }
     } else {
@@ -270,9 +302,12 @@ export function useAuth(options?: UseAuthOptions) {
 
       return {
         user,
-        loading: firebaseLoading || meQuery.isLoading,
+        loading:
+          firebaseLoading ||
+          meQuery.isLoading ||
+          (Boolean(firebaseUser) && !sessionSynced),
         error: firebaseError ?? meQuery.error ?? null,
-        isAuthenticated: Boolean(firebaseUser),
+        isAuthenticated: Boolean(firebaseUser) && sessionSynced,
       };
     } else {
       // tRPC auth state
@@ -291,9 +326,10 @@ export function useAuth(options?: UseAuthOptions) {
     firebaseUser,
     firebaseLoading,
     firebaseError,
+    sessionSynced,
     meQuery.data,
-      meQuery.error,
-      meQuery.isLoading,
+    meQuery.error,
+    meQuery.isLoading,
     logoutMutation.error,
     logoutMutation.isPending,
   ]);

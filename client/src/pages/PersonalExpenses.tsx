@@ -1,4 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { EmptyState } from "@/components/EmptyState";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,6 +11,7 @@ import { Loader2, Plus, Trash2, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export default function PersonalExpenses() {
   const { isAuthenticated } = useAuth();
@@ -21,6 +24,28 @@ export default function PersonalExpenses() {
   const [date, setDate] = useState<string>(() => new Date().toISOString().substring(0, 10));
 
   const { data: expenses, isLoading, refetch } = trpc.personalExpenses.list.useQuery(undefined, { enabled: isAuthenticated });
+  const expensesList = (expenses as any[]) ?? [];
+  const totalAmount = expensesList.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const lastUpdate = expensesList[0]?.updatedAt
+    ? new Date(expensesList[0].updatedAt).toLocaleDateString("pt-BR")
+    : new Date().toLocaleDateString("pt-BR");
+  const heroStats = [
+    {
+      label: "Lançamentos",
+      value: expensesList.length,
+      helper: expensesList.length === 1 ? "item registrado" : "itens registrados",
+    },
+    {
+      label: "Total acumulado",
+      value: formatCents(totalAmount),
+      helper: "Atualizado em tempo real",
+    },
+    {
+      label: "Última atualização",
+      value: lastUpdate,
+      helper: "Baseado nos dados mais recentes",
+    },
+  ];
 
   const createMutation = trpc.personalExpenses.create.useMutation({
     onSuccess: () => {
@@ -69,67 +94,124 @@ export default function PersonalExpenses() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Despesas Pessoais</h1>
-          <p className="text-sm text-muted-foreground">Gerencie suas despesas pessoais</p>
+      <PageContainer className="app-hero">
+        <div className="space-y-4">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Finanças pessoais</p>
+          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
+            Monitore despesas próprias com a mesma experiência premium do app
+          </h1>
+          <p className="text-sm text-muted-foreground sm:text-base">
+            Tudo fica salvo no Firebase com histórico, filtros por categoria e sincronização em qualquer dispositivo.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {heroStats.map((stat) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 200, damping: 22 }}
+                className="glass-panel rounded-3xl border border-border/70 p-4"
+              >
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
+                <p className="text-2xl font-semibold">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.helper}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Nova</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nova Despesa</DialogTitle>
-              <DialogDescription>Registre uma despesa pessoal</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Valor (R$) *</Label><Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 25.99" /></div>
-              <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Despesa</DialogTitle>
-              <DialogDescription>Atualize os campos necessários</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2"><Label>Título</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Valor (R$)</Label><Input value={amount} onChange={e => setAmount(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-              <Button onClick={handleUpdate} disabled={updateMutation.isPending}>{updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </PageContainer>
+
+      <PageContainer className="glass-panel rounded-3xl border border-border/70 bg-card/70">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Registrar despesas</h2>
+            <p className="text-sm text-muted-foreground">Cadastre novos itens ou edite lançamentos existentes.</p>
+          </div>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Nova despesa</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova Despesa</DialogTitle>
+                <DialogDescription>Registre uma despesa pessoal</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Valor (R$) *</Label><Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 25.99" /></div>
+                <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+                <Button onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </PageContainer>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Despesa</DialogTitle>
+            <DialogDescription>Atualize os campos necessários</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2"><Label>Título</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Valor (R$)</Label><Input value={amount} onChange={e => setAmount(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+            <Button onClick={handleUpdate} disabled={updateMutation.isPending}>{updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
-      ) : !expenses || expenses.length === 0 ? (
-        <Card className="rounded-2xl border border-border/70"><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhuma despesa</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeira</Button></CardContent></Card>
+      ) : expensesList.length === 0 ? (
+        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+          <EmptyState
+            title="Sem despesas registradas"
+            description="Organize recibos pessoais, metas e comprovantes em um só lugar."
+            cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Adicionar agora</Button>}
+          />
+        </PageContainer>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-          {(expenses as any[]).map(e => (
-            <Card key={e.id} className="rounded-2xl border border-border/70">
-              <CardHeader className="pb-2"><CardTitle className="text-lg flex justify-between"><span>{(e as any).title}</span><span className="flex gap-1"> <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => startEdit(e)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="rounded-xl" onClick={() => handleDelete(e.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button></span></CardTitle><CardDescription>{(e as any).category || 'Sem categoria'}</CardDescription></CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <div className="flex justify-between"><span>Valor</span><span className="font-medium">{formatCents((e as any).amount)}</span></div>
-                <div className="flex justify-between"><span>Data</span><span>{(e as any).date ? new Date((e as any).date).toLocaleDateString('pt-BR') : '-'}</span></div>
-              </CardContent>
-            </Card>
+        <PageContainer className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {expensesList.map((item: any) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 170, damping: 20 }}
+            >
+              <Card className="interactive-card rounded-3xl border border-border/60 bg-card/80">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-start justify-between gap-3 text-lg">
+                    <span>{item.title}</span>
+                    <span className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => startEdit(item)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </span>
+                  </CardTitle>
+                  <CardDescription>{item.category || 'Sem categoria'}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between"><span>Valor</span><span className="font-semibold">{formatCents(item.amount)}</span></div>
+                  <div className="flex items-center justify-between"><span>Data</span><span>{item.date ? new Date(item.date).toLocaleDateString('pt-BR') : '-'}</span></div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
-        </div>
+        </PageContainer>
       )}
     </div>
   );

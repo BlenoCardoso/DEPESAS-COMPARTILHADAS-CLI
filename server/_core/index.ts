@@ -1,4 +1,5 @@
 import "dotenv/config";
+import cors from "cors";
 import express from "express";
 import { createServer as createHttpServer } from "http";
 import { createServer as createHttpsServer } from "https";
@@ -33,6 +34,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // Reflect request origin by default so Capacitor / mobile builds can call the API; optional env locks this down in production.
+  const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map(origin => origin.trim())
+    .filter(Boolean);
+  const corsMiddleware = cors({
+    origin: allowedOrigins.length === 0 ? true : allowedOrigins,
+    credentials: true,
+  });
+  app.use(corsMiddleware);
+  app.options("*", corsMiddleware);
   const useHttps = process.env.DEV_HTTPS === "true" || process.env.NODE_ENV === "production";
 
   const server = (() => {

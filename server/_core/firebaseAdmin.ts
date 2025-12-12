@@ -7,8 +7,15 @@ function init(): App {
 
   const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (svc) {
-    const creds = JSON.parse(svc);
-    return initializeApp({ credential: cert(creds as any) });
+    try {
+      const creds = JSON.parse(svc);
+      if (typeof creds.private_key === "string") {
+        creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+      }
+      return initializeApp({ credential: cert(creds as any) });
+    } catch (error) {
+      console.warn("[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT, falling back to applicationDefault", error);
+    }
   }
 
   return initializeApp({ credential: applicationDefault() });

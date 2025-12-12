@@ -1,6 +1,7 @@
 import { adminDb } from "./_core/firebaseAdmin";
 import { ENV } from "./_core/env";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import type { DocumentReference } from "firebase-admin/firestore";
 
 // Public types exposed to the rest of the server
 export type User = {
@@ -39,7 +40,8 @@ const omitUndefined = <T extends Record<string, any>>(obj: T): T => {
 // ============ USERS ============
 export async function upsertUser(user: User): Promise<void> {
   const db = adminDb();
-  const snap = await db.collection("users").where("openId", "==", user.openId).limit(1).get();
+  const usersCollection = db.collection("users");
+  const snap = await usersCollection.where("openId", "==", user.openId).limit(1).get();
   const hasEmailProp = Object.prototype.hasOwnProperty.call(user, "email");
   const normalizedEmail = typeof user.email === "string"
     ? user.email.toLowerCase()
@@ -57,7 +59,20 @@ export async function upsertUser(user: User): Promise<void> {
     data.email = normalizedEmail;
   }
   if (snap.empty) {
-    await db.collection("users").add({ ...data, ...nowCreate() });
+    let targetRef: DocumentReference | null = null;
+
+    if (normalizedEmail) {
+      const emailSnap = await usersCollection.where("email", "==", normalizedEmail).limit(1).get();
+      if (!emailSnap.empty) {
+        targetRef = emailSnap.docs[0].ref;
+      }
+    }
+
+    if (!targetRef) {
+      await usersCollection.add({ ...data, ...nowCreate() });
+    } else {
+      await targetRef.set({ ...data, ...nowUpdate(), email: normalizedEmail ?? null }, { merge: true });
+    }
   } else {
     await snap.docs[0].ref.set(data, { merge: true });
   }

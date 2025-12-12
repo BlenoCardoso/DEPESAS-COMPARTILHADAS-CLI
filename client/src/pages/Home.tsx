@@ -1,10 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_TITLE, getLoginUrl } from "@/const";
+import { APP_TITLE } from "@/const";
 import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import { CreditCard, TrendingUp, Users, Calendar, Bell, Wallet } from "lucide-react";
+import { CreditCard, TrendingUp, Users, Wallet } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Home() {
@@ -13,6 +13,7 @@ export default function Home() {
   const { data: groups } = trpc.groups.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  const groupsList = Array.isArray(groups) ? groups : [];
 
   const { data: unreadCount } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -33,6 +34,8 @@ export default function Home() {
   const { data: sharedCountData } = trpc.sharedExpenses.countForUser.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+
+  const firstName = user?.name?.split(" ")[0] ?? "";
 
   if (loading) {
     return (
@@ -122,36 +125,36 @@ export default function Home() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Olá, {user?.name?.split(" ")[0]}! 👋</h1>
+        <h1 className="text-xl font-semibold sm:text-3xl">Olá, {firstName}!</h1>
         <p className="text-sm text-muted-foreground sm:text-base">Bem-vindo de volta ao seu painel de controle</p>
       </div>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <Link href="/groups">
-          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
               <CardTitle className="text-sm font-medium">Meus Grupos</CardTitle>
               <Users className="h-5 w-5 text-primary" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{groups?.length || 0}</div>
+            <CardContent className="px-4 pb-4 pt-0">
+              <div className="text-2xl font-bold">{groupsList.length}</div>
               <p className="text-xs text-muted-foreground">
-                {groups?.length === 1 ? "grupo ativo" : "grupos ativos"}
+                {groupsList.length === 1 ? "grupo ativo" : "grupos ativos"}
               </p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/shared-expenses">
-          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
               <CardTitle className="text-sm font-medium">Despesas Compartilhadas</CardTitle>
               <CreditCard className="h-5 w-5 text-secondary" />
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-1 px-4 pb-4 pt-0">
               <div className="flex items-baseline gap-2">
                 <div className="text-2xl font-bold">{sharedCountData?.count ?? 0}</div>
                 <span className="text-xs text-muted-foreground">itens</span>
@@ -165,12 +168,12 @@ export default function Home() {
         </Link>
 
         <Link href="/personal-expenses">
-          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
               <CardTitle className="text-sm font-medium">Despesas Pessoais</CardTitle>
               <Wallet className="h-5 w-5 text-accent" />
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-1 px-4 pb-4 pt-0">
               <div className="flex items-baseline gap-2">
                 <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
                 <span className="text-xs text-muted-foreground">itens</span>
@@ -184,14 +187,14 @@ export default function Home() {
         </Link>
 
         <Link href="/notifications">
-          <Card className="cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
               <CardTitle className="text-sm font-medium">Notificações</CardTitle>
               <div className="h-5 w-5 rounded-full bg-info flex items-center justify-center text-xs text-white font-bold">
                 {unreadCount || 0}
               </div>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-1 px-4 pb-4 pt-0">
               <div className="flex items-baseline gap-2">
                 <div className="text-2xl font-bold">{notificationsCount}</div>
                 <span className="text-xs text-muted-foreground">total</span>
@@ -206,30 +209,30 @@ export default function Home() {
 
       {/* Ações rápidas */}
       <Card className="rounded-2xl border border-border/70">
-        <CardHeader>
+        <CardHeader className="p-4 pb-3">
           <CardTitle>Ações Rápidas</CardTitle>
           <CardDescription>Acesse rapidamente as funcionalidades principais</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
-          <Button asChild variant="outline" className="w-full justify-start gap-2">
+        <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 sm:gap-3">
+          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
             <Link href="/groups">
               <Users className="h-4 w-4" />
               Criar Grupo
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2">
+          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
             <Link href="/shared-expenses">
               <CreditCard className="h-4 w-4" />
               Nova Despesa
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2">
+          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
             <Link href="/tasks">
               <TrendingUp className="h-4 w-4" />
               Adicionar Tarefa
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2">
+          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
             <Link href="/reports">
               <TrendingUp className="h-4 w-4" />
               Ver Relatórios

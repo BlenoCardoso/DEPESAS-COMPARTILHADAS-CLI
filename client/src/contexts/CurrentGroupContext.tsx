@@ -22,6 +22,7 @@ export function CurrentGroupProvider({ children }: PropsWithChildren) {
     refetchOnWindowFocus: false,
     enabled: isAuthenticated,
   });
+  const groups = Array.isArray(groupsQuery.data) ? groupsQuery.data : [];
 
   // auto-select first group if none
   useEffect(() => {
@@ -30,16 +31,16 @@ export function CurrentGroupProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    if (!groupId && groupsQuery.data && groupsQuery.data.length > 0) {
-      setGroupId(groupsQuery.data[0].group.id);
+    if (!groupId && groups.length > 0) {
+      setGroupId(groups[0].group.id);
     }
-  }, [groupId, groupsQuery.data, isAuthenticated]);
+  }, [groupId, groups, isAuthenticated]);
 
   const currentGroup = useMemo<CurrentGroup | null>(() => {
     if (!isAuthenticated) return null;
-    const g = groupsQuery.data?.find(x => x.group.id === groupId)?.group;
+    const g = groups.find(x => x.group.id === groupId)?.group;
     return g ? { id: g.id, name: g.name } : null;
-  }, [groupId, groupsQuery.data, isAuthenticated]);
+  }, [groupId, groups, isAuthenticated]);
 
   const setCurrentGroupId = useCallback((id: string | null) => {
     setGroupId(id);
