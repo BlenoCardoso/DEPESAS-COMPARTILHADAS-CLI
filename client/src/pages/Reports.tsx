@@ -1,7 +1,9 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/utils";
 import { Loader2, RefreshCcw, TrendingUp, Wallet, Users } from "lucide-react";
@@ -9,6 +11,7 @@ import { useState } from "react";
 
 export default function Reports() {
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const summaryQuery = trpc.reports.summary.useQuery(
@@ -98,36 +101,48 @@ export default function Reports() {
               );
             })}
           </div>
-          <Card className="rounded-2xl border border-border/70">
-            <CardHeader className="pb-2">
-              <CardTitle>Por Categoria</CardTitle>
-              <CardDescription>Soma em reais</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              {summaryQuery.data.categories.length === 0 && <p className="text-muted-foreground">Sem dados</p>}
-              {summaryQuery.data.categories.map((c, index) => {
-                const colors = ["from-primary/60", "from-secondary/60", "from-accent/60", "from-info/60", "from-success/60"];
-                const color = colors[index % colors.length];
-                const percent = summaryQuery.data.grandTotal
-                  ? (c.total / summaryQuery.data.grandTotal) * 100
-                  : 0;
-                return (
-                  <div key={c.name} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{c.name}</span>
-                      <span className="font-semibold">{formatCents(c.total)}</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-muted">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${color} to-transparent`}
-                        style={{ width: `${Math.min(100, percent)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
+          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "categories"}>
+            <AccordionItem value="categories" className="border-none">
+              <AccordionTrigger className="rounded-2xl border border-border/70 bg-card/60 px-4 py-3 hover:no-underline">
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold">Detalhar por categoria</span>
+                  <span className="text-xs text-muted-foreground">Toque para expandir</span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pt-3">
+                <Card className="rounded-2xl border border-border/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle>Por Categoria</CardTitle>
+                    <CardDescription>Soma em reais</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    {summaryQuery.data.categories.length === 0 && <p className="text-muted-foreground">Sem dados</p>}
+                    {summaryQuery.data.categories.map((c, index) => {
+                      const colors = ["from-primary/60", "from-secondary/60", "from-accent/60", "from-info/60", "from-success/60"];
+                      const color = colors[index % colors.length];
+                      const percent = summaryQuery.data.grandTotal
+                        ? (c.total / summaryQuery.data.grandTotal) * 100
+                        : 0;
+                      return (
+                        <div key={c.name} className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{c.name}</span>
+                            <span className="font-semibold">{formatCents(c.total)}</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${color} to-transparent`}
+                              style={{ width: `${Math.min(100, percent)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </>
       ) : (
         <p className="text-muted-foreground">Sem dados</p>

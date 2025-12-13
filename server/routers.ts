@@ -77,7 +77,7 @@ export const appRouter = router({
           description: input.description,
         });
 
-        return { success: true, groupId: inv.groupId };
+        return { success: true, groupId: input.id };
       }),
 
     delete: protectedProcedure
@@ -614,7 +614,7 @@ export const appRouter = router({
           });
         }
 
-        return { success: true };
+        return { success: true, groupId: input.accept ? inv.groupId : undefined };
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.string() }))

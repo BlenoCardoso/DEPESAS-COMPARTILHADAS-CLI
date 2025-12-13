@@ -1,9 +1,24 @@
 import { initializeApp, applicationDefault, cert, getApps, getApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import fs from "node:fs";
 
 function init(): App {
   if (getApps().length > 0) return getApp();
+
+  const svcFile = process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
+  if (svcFile) {
+    try {
+      const raw = fs.readFileSync(svcFile, "utf8");
+      const creds = JSON.parse(raw);
+      if (typeof creds.private_key === "string") {
+        creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+      }
+      return initializeApp({ credential: cert(creds as any) });
+    } catch (error) {
+      console.warn("[Firebase Admin] Failed to load FIREBASE_SERVICE_ACCOUNT_FILE, falling back", error);
+    }
+  }
 
   const svc = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (svc) {

@@ -1,17 +1,12 @@
 import "dotenv/config";
-import cors from "cors";
 import express from "express";
 import { createServer as createHttpServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import net from "net";
 import os from "os";
 import fs from "node:fs";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerFirebaseAuthRoutes } from "./firebaseAuth";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { createExpressApp } from "./app";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,18 +28,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  const app = express();
-  // Reflect request origin by default so Capacitor / mobile builds can call the API; optional env locks this down in production.
-  const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
-    .split(",")
-    .map(origin => origin.trim())
-    .filter(Boolean);
-  const corsMiddleware = cors({
-    origin: allowedOrigins.length === 0 ? true : allowedOrigins,
-    credentials: true,
-  });
-  app.use(corsMiddleware);
-  app.options("*", corsMiddleware);
+  const app = createExpressApp();
   const useHttps = process.env.DEV_HTTPS === "true" || process.env.NODE_ENV === "production";
 
   const server = (() => {
@@ -69,21 +53,6 @@ async function startServer() {
     }
     return createHttpServer(app);
   })();
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
-  // Firebase auth exchange endpoint (optional)
-  registerFirebaseAuthRoutes(app);
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

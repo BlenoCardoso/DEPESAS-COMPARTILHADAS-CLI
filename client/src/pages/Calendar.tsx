@@ -6,8 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
-import { CalendarDays, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -142,7 +143,25 @@ export default function Calendar() {
                 <CardHeader className="pb-2">
                   <CardTitle className="flex justify-between text-lg">
                     <span>{(ev as any).title}</span>
-                    <Button variant="ghost" size="icon" className="rounded-xl interactive-tap" onClick={() => handleDelete(ev.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="rounded-xl interactive-tap" aria-label="Mais opções">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDelete(ev.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Remover
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </CardTitle>
                   <div className="flex items-center gap-2 text-sm">
                     <CardDescription>{(ev as any).allDay ? 'Dia inteiro' : 'Evento pontual'}</CardDescription>

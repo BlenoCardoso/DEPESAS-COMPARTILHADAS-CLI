@@ -7,35 +7,6 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:681474270325:android:73d53bd72a0ba12453843c",
-        "android_client_info": {
-          "package_name": "Depesas.compartilhadas.VS"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "681474270325-3uhees1k29ld00ani2k39eioigreot49.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyC3Es9kMf51eCVdAgENb8QRiYyy7eDU_OM"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "681474270325-3uhees1k29ld00ani2k39eioigreot49.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:681474270325:android:46119fa9f5a9cfb753843c",
         "android_client_info": {
           "package_name": "com.despesas.compartilhadas"

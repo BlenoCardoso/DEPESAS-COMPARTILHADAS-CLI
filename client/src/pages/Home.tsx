@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_TITLE } from "@/const";
 import { formatCents } from "@/lib/utils";
@@ -53,30 +54,48 @@ export default function Home() {
             <div className="mx-auto h-16 w-16 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
               <CreditCard className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-gradient">{APP_TITLE}</h1>
-            <p className="text-lg text-muted-foreground">
+            <h1 className="text-2xl font-bold text-gradient sm:text-4xl">{APP_TITLE}</h1>
+            <p className="text-sm text-muted-foreground sm:text-lg">
               Gerencie suas despesas compartilhadas e pessoais de forma simples e eficiente
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 py-6">
-            <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-primary/10">
-              <Users className="h-8 w-8 text-primary" />
-              <span className="text-sm font-medium">Grupos</span>
-            </div>
-            <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary/10">
-              <CreditCard className="h-8 w-8 text-secondary" />
-              <span className="text-sm font-medium">Despesas</span>
-            </div>
-            <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/10">
-              <Wallet className="h-8 w-8 text-accent" />
-              <span className="text-sm font-medium">Pessoal</span>
-            </div>
-            <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-info/10">
-              <TrendingUp className="h-8 w-8 text-info" />
-              <span className="text-sm font-medium">Relatórios</span>
-            </div>
-          </div>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="features" className="border-none">
+              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold">Ver recursos</span>
+                  <span className="text-xs text-muted-foreground">Toque para expandir</span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pt-3">
+                <div className="grid grid-cols-2 gap-4 py-2">
+                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-primary/10">
+                    <Users className="h-8 w-8 text-primary" />
+                    <span className="text-sm font-medium">Grupos</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary/10">
+                    <CreditCard className="h-8 w-8 text-secondary" />
+                    <span className="text-sm font-medium">Despesas</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/10">
+                    <Wallet className="h-8 w-8 text-accent" />
+                    <span className="text-sm font-medium">Pessoal</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-info/10">
+                    <TrendingUp className="h-8 w-8 text-info" />
+                    <span className="text-sm font-medium">Relatórios</span>
+                  </div>
+                </div>
+
+                <div className="text-center text-xs text-muted-foreground space-y-1">
+                  <p>Login seguro com Firebase Authentication</p>
+                  <p>Sincronização em tempo real</p>
+                  <p>Funciona offline</p>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           <Button
             size="lg"
@@ -113,12 +132,6 @@ export default function Home() {
               </div>
             )}
           </Button>
-
-          <div className="text-center text-xs text-muted-foreground space-y-1">
-            <p>🔒 Login seguro com Firebase Authentication</p>
-            <p>⚡ Sincronização em tempo real</p>
-            <p>📱 Funciona offline</p>
-          </div>
         </div>
       </div>
     );
@@ -159,9 +172,7 @@ export default function Home() {
                 <div className="text-2xl font-bold">{sharedCountData?.count ?? 0}</div>
                 <span className="text-xs text-muted-foreground">itens</span>
               </div>
-              <div className="text-sm font-medium">
-                {formatCents(sharedCountData?.totalAmount ?? 0)}
-              </div>
+              <div className="text-sm font-medium">{formatCents(sharedCountData?.totalAmount ?? 0)}</div>
               <p className="text-xs text-muted-foreground">Ver todas as despesas</p>
             </CardContent>
           </Card>
@@ -178,9 +189,7 @@ export default function Home() {
                 <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
                 <span className="text-xs text-muted-foreground">itens</span>
               </div>
-              <div className="text-sm font-medium">
-                {formatCents(personalTotal)}
-              </div>
+              <div className="text-sm font-medium">{formatCents(personalTotal)}</div>
               <p className="text-xs text-muted-foreground">Ver minhas despesas</p>
             </CardContent>
           </Card>

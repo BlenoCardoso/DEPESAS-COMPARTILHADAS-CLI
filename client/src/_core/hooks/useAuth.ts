@@ -45,7 +45,10 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
-    enabled: !usingFirebase || (Boolean(firebaseUser) && sessionSynced),
+    // Quando usando Firebase, o client já envia Authorization: Bearer <idToken> via tRPC.
+    // Isso torna o session cookie opcional (melhora tempo de entrada e evita travas quando
+    // a troca de sessão falha/atrasa).
+    enabled: !usingFirebase || Boolean(firebaseUser),
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -72,7 +75,7 @@ export function useAuth(options?: UseAuthOptions) {
 
       sessionSyncInProgress = (async () => {
         try {
-          const idToken = await user.getIdToken(options?.forceRefresh ?? true);
+          const idToken = await user.getIdToken(options?.forceRefresh ?? false);
           await fetch('/api/auth/firebase/session', {
             method: 'POST',
             headers: {
@@ -302,12 +305,11 @@ export function useAuth(options?: UseAuthOptions) {
 
       return {
         user,
-        loading:
-          firebaseLoading ||
-          meQuery.isLoading ||
-          (Boolean(firebaseUser) && !sessionSynced),
+        // Não bloqueia a UI esperando o cookie de sessão.
+        // As rotas protegidas já funcionam via Bearer token no tRPC.
+        loading: firebaseLoading,
         error: firebaseError ?? meQuery.error ?? null,
-        isAuthenticated: Boolean(firebaseUser) && sessionSynced,
+        isAuthenticated: Boolean(firebaseUser),
       };
     } else {
       // tRPC auth state

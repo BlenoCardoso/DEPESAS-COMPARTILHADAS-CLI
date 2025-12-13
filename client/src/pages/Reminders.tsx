@@ -2,10 +2,11 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -67,7 +68,31 @@ export default function Reminders() {
         <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
             {(reminders as any[]).map(r => (
             <Card key={r.id} className="rounded-2xl border border-border/70">
-              <CardHeader className="pb-2"><CardTitle className="flex justify-between text-lg"><span>{r.title}</span><Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button></CardTitle><CardDescription>{r.category || 'Sem categoria'}</CardDescription></CardHeader>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex justify-between text-lg">
+                  <span>{r.title}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => handleDelete(r.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Trash2 className="h-4 w-4" />
+                          Remover
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardTitle>
+                <CardDescription>{r.category || 'Sem categoria'}</CardDescription>
+              </CardHeader>
               <CardContent className="text-sm space-y-1">
                 <div className="flex justify-between"><span>Data</span><span>{new Date(r.reminderDate).toLocaleString('pt-BR')}</span></div>
               </CardContent>

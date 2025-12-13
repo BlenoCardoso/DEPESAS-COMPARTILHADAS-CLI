@@ -110,9 +110,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           />
         )}
 
-        <div className="flex min-h-[100dvh] flex-col">
+        <div className="flex h-[100dvh] flex-col overflow-hidden">
           <header className="sticky top-0 z-40 border-b border-border/70 bg-card/85 backdrop-blur-xl">
-            <div className="flex h-[var(--header-height)] items-center justify-between px-4 sm:px-6">
+            <div className="pt-[var(--safe-area-top)]">
+              <div className="flex h-[var(--header-height)] items-center justify-between px-4 sm:px-6">
               <div className="flex items-center gap-3">
                 <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                   <SheetTrigger asChild>
@@ -167,10 +168,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 </Button>
               </div>
             </div>
+            </div>
           </header>
 
           <main
-            className="flex-1 md:pb-0"
+            className="flex-1 overflow-y-auto md:pb-0"
             style={{ paddingBottom: forceMobile ? "calc(var(--bottom-nav-height) + var(--safe-area-bottom))" : undefined }}
           >
             <PageContainer as="div">

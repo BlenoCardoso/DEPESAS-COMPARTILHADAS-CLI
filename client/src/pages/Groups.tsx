@@ -3,13 +3,16 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
+import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Settings, Trash2, Users, MailPlus, LogIn, ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +20,7 @@ import { Link, useLocation } from "wouter";
 
 export default function Groups() {
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -116,31 +120,44 @@ export default function Groups() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <PageContainer className="app-hero">
-        <div className="space-y-4">
+        <div className="space-y-3">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Gestão de grupos</p>
-          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
+          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
             Centralize grupos, convites e regras em um único painel
           </h1>
-          <p className="text-sm text-muted-foreground sm:text-base">
-            Conectado ao Firebase em tempo real para sincronizar convites, listas de membros e permissões.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {heroHighlights.map((item) => (
-              <motion.div
-                key={item.label}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 180, damping: 20 }}
-                className="glass-panel rounded-3xl border border-border/70 p-4"
-              >
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">{item.label}</p>
-                <p className="text-2xl font-semibold">{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.helper}</p>
-              </motion.div>
-            ))}
-          </div>
+
+          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "highlights"}>
+            <AccordionItem value="highlights" className="border-none">
+              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold">Resumo</span>
+                  <span className="text-xs text-muted-foreground">Toque para ver detalhes e estatísticas</span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pt-3">
+                <p className="text-sm text-muted-foreground sm:text-base">
+                  Conectado ao Firebase em tempo real para sincronizar convites, listas de membros e permissões.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {heroHighlights.map((item) => (
+                    <motion.div
+                      key={item.label}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 180, damping: 20 }}
+                      className="glass-panel rounded-3xl border border-border/70 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{item.label}</p>
+                      <p className="text-2xl font-semibold">{item.value}</p>
+                      <p className="text-xs text-muted-foreground">{item.helper}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </PageContainer>
 
@@ -252,30 +269,44 @@ export default function Groups() {
                         <LogIn className="h-4 w-4" />
                         Entrar
                       </Button>
-                      <Button asChild variant="ghost" size="icon" className="rounded-xl border border-border/60">
-                        <Link href={`/groups/${item.group.id}`}>
-                          <Settings className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Convidar"
-                        onClick={() => {
-                          setInviteGroupId(item.group.id);
-                          setInviteOpen(true);
-                        }}
-                      >
-                        <MailPlus className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(item.group.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="rounded-xl border border-border/60" aria-label="Mais opções">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/groups/${item.group.id}`}>
+                              <span className="flex items-center gap-2">
+                                <Settings className="h-4 w-4" />
+                                Configurar
+                              </span>
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setInviteGroupId(item.group.id);
+                              setInviteOpen(true);
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              <MailPlus className="h-4 w-4" />
+                              Convidar
+                            </span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(item.group.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Trash2 className="h-4 w-4" />
+                              Excluir
+                            </span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardHeader>

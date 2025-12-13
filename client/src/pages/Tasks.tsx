@@ -1,4 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { EmptyState } from "@/components/EmptyState";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -7,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, Plus, Trash2, Flame, AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Flame, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,6 +21,27 @@ export default function Tasks() {
   const [dueDate, setDueDate] = useState<string>("");
 
   const { data: tasks, isLoading, refetch } = trpc.tasks.list.useQuery(undefined, { enabled: isAuthenticated });
+  const tasksList = Array.isArray(tasks) ? tasks : [];
+  const completedCount = tasksList.filter((t: any) => Boolean(t?.completed)).length;
+  const pendingCount = tasksList.length - completedCount;
+
+  const heroStats = [
+    {
+      label: "Total",
+      value: tasksList.length,
+      helper: tasksList.length === 1 ? "tarefa registrada" : "tarefas registradas",
+    },
+    {
+      label: "Pendentes",
+      value: pendingCount,
+      helper: pendingCount === 1 ? "item para concluir" : "itens para concluir",
+    },
+    {
+      label: "Concluídas",
+      value: completedCount,
+      helper: "Histórico do seu dia",
+    },
+  ];
 
   const createMutation = trpc.tasks.create.useMutation({
     onSuccess: () => { toast.success("Tarefa criada"); setIsCreateOpen(false); setTitle(""); setPriority("medium"); setDueDate(""); refetch(); },
@@ -58,56 +81,104 @@ export default function Tasks() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Tarefas</h1>
-          <p className="text-sm text-muted-foreground">Organize suas tarefas</p>
-        </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Nova</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nova Tarefa</DialogTitle>
-              <DialogDescription>Defina prioridade e prazo</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
-              <div className="space-y-2">
-                <Label>Prioridade</Label>
-                <Select value={priority} onValueChange={v => setPriority(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baixa</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                  </SelectContent>
-                </Select>
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <PageContainer className="app-hero">
+        <div className="space-y-4">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Produtividade</p>
+          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">Tarefas com foco e clareza</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">Organize prioridades e acompanhe o que falta concluir.</p>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {heroStats.map((stat) => (
+              <div key={stat.label} className="glass-panel rounded-3xl border border-border/70 p-4">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
+                <p className="text-2xl font-semibold">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.helper}</p>
               </div>
-              <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            ))}
+          </div>
+        </div>
+      </PageContainer>
+
+      <PageContainer className="glass-panel space-y-4 rounded-3xl border border-border/70 bg-card/70">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Ações rápidas</h2>
+            <p className="text-sm text-muted-foreground">Crie novas tarefas e mantenha o painel sempre leve no celular.</p>
+          </div>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full gap-2 sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Nova tarefa
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova Tarefa</DialogTitle>
+                <DialogDescription>Defina prioridade e prazo</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Título *</Label>
+                  <Input value={title} onChange={e => setTitle(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Prioridade</Label>
+                  <Select value={priority} onValueChange={v => setPriority(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Baixa</SelectItem>
+                      <SelectItem value="medium">Média</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo</Label>
+                  <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+                <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Salvar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </PageContainer>
+
       {isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
-      ) : !tasks || tasks.length === 0 ? (
-        <Card className="rounded-2xl border border-border/70 interactive-card"><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhuma tarefa</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeira</Button></CardContent></Card>
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : tasksList.length === 0 ? (
+        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+          <EmptyState
+            title="Nenhuma tarefa"
+            description="Crie sua primeira tarefa e acompanhe prioridades sem bagunça na tela."
+            cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Criar primeira</Button>}
+          />
+        </PageContainer>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-            {(tasks as any[]).map(t => {
-              const priority = (t as any).priority || "medium";
-              const completed = (t as any).completed;
-              return (
-              <Card key={t.id} className={`rounded-2xl border border-border/60 shadow-sm transition-all interactive-card ${completed ? 'opacity-70' : 'opacity-100'} ${getCardGradient(priority, completed)}`}>
+        <PageContainer className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+          {tasksList.map((t: any) => {
+            const priority = t?.priority || "medium";
+            const completed = Boolean(t?.completed);
+            return (
+              <Card
+                key={t.id}
+                className={`rounded-3xl border border-border/60 shadow-sm transition-all interactive-card ${
+                  completed ? "opacity-70" : "opacity-100"
+                } ${getCardGradient(priority, completed)}`}
+              >
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex justify-between items-start text-lg">
+                  <CardTitle className="flex items-start justify-between gap-3 text-lg">
                     <span className="flex items-center gap-2">
                       {completed ? (
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -116,7 +187,7 @@ export default function Tasks() {
                           {priorityStyles[priority]?.icon}
                         </span>
                       )}
-                      {(t as any).title}
+                      {t?.title}
                     </span>
                     <div className="flex gap-1">
                       <Button
@@ -125,10 +196,20 @@ export default function Tasks() {
                         className="rounded-xl interactive-tap"
                         onClick={() => handleToggle(t.id, completed)}
                         disabled={toggleMutation.isPending}
+                        aria-label={completed ? "Reabrir" : "Concluir"}
                       >
-                        {completed ? '⟳' : '✔'}
+                        {completed ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="rounded-xl interactive-tap" onClick={() => handleDelete(t.id)} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-xl interactive-tap"
+                        onClick={() => handleDelete(t.id)}
+                        disabled={deleteMutation.isPending}
+                        aria-label="Remover"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </CardTitle>
                   <div className="flex items-center gap-2 text-xs">
@@ -138,13 +219,22 @@ export default function Tasks() {
                     {completed && <Badge variant="outline">Concluída</Badge>}
                   </div>
                 </CardHeader>
-                <CardContent className="text-sm space-y-1">
-                  {(t as any).dueDate && <div className="flex justify-between"><span>Prazo</span><span>{new Date((t as any).dueDate).toLocaleDateString('pt-BR')}</span></div>}
-                  <div className="flex justify-between"><span>Status</span><span>{(t as any).completed ? 'Concluída' : 'Pendente'}</span></div>
+                <CardContent className="space-y-1 text-sm">
+                  {t?.dueDate && (
+                    <div className="flex justify-between">
+                      <span>Prazo</span>
+                      <span>{new Date(t.dueDate).toLocaleDateString("pt-BR")}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>Status</span>
+                    <span>{completed ? "Concluída" : "Pendente"}</span>
+                  </div>
                 </CardContent>
               </Card>
-            );})}
-        </div>
+            );
+          })}
+        </PageContainer>
       )}
     </div>
   );

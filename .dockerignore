@@ -1,0 +1,9 @@
+node_modules
+android
+.dist
+dist
+.vscode
+.git
+.gitignore
+pnpm-store
+**/*.log

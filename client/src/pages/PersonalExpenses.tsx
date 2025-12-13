@@ -3,18 +3,22 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Trash2, Pencil } from "lucide-react";
+import { Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useIsMobile } from "@/hooks/useMobile";
 
 export default function PersonalExpenses() {
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // valor em reais (string)
@@ -93,31 +97,39 @@ export default function PersonalExpenses() {
   const handleDelete = (id: string) => { if (confirm("Remover despesa?")) deleteMutation.mutate({ id }); };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <PageContainer className="app-hero">
-        <div className="space-y-4">
+        <div className="space-y-3">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Finanças pessoais</p>
-          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
-            Monitore despesas próprias com a mesma experiência premium do app
-          </h1>
-          <p className="text-sm text-muted-foreground sm:text-base">
-            Tudo fica salvo no Firebase com histórico, filtros por categoria e sincronização em qualquer dispositivo.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {heroStats.map((stat) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 200, damping: 22 }}
-                className="glass-panel rounded-3xl border border-border/70 p-4"
-              >
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-                <p className="text-2xl font-semibold">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.helper}</p>
-              </motion.div>
-            ))}
-          </div>
+          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">Despesas pessoais</h1>
+
+          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "stats"}>
+            <AccordionItem value="stats" className="border-none">
+              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold">Resumo</span>
+                  <span className="text-xs text-muted-foreground">Toque para ver estatísticas</span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pt-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {heroStats.map((stat) => (
+                    <motion.div
+                      key={stat.label}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 22 }}
+                      className="glass-panel rounded-3xl border border-border/70 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
+                      <p className="text-2xl font-semibold">{stat.value}</p>
+                      <p className="text-xs text-muted-foreground">{stat.helper}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </PageContainer>
 
@@ -193,14 +205,31 @@ export default function PersonalExpenses() {
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-start justify-between gap-3 text-lg">
                     <span>{item.title}</span>
-                    <span className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => startEdit(item)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => startEdit(item)}>
+                          <span className="flex items-center gap-2">
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Remover
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </CardTitle>
                   <CardDescription>{item.category || 'Sem categoria'}</CardDescription>
                 </CardHeader>

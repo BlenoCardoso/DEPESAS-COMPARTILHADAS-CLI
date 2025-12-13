@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Trash2, Pencil, CheckCircle2, SlidersHorizontal } from "lucide-react";
+import { CheckCircle2, Loader2, MoreVertical, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
@@ -49,10 +51,10 @@ export default function SharedExpenses() {
 
   // Seleciona automaticamente primeiro grupo
   useEffect(() => {
-    if (!groupId && groups && groups.length > 0) {
-      setCurrentGroupId(groups[0].group.id);
+    if (!groupId && groupsList.length > 0) {
+      setCurrentGroupId(groupsList[0].group.id);
     }
-  }, [groups, groupId, setCurrentGroupId]);
+  }, [groupsList, groupId, setCurrentGroupId]);
 
   const { data: expenses, isLoading, refetch } = trpc.sharedExpenses.list.useQuery(
     { groupId: groupId! },
@@ -221,31 +223,44 @@ export default function SharedExpenses() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <PageContainer className="app-hero">
-        <div className="space-y-4">
+        <div className="space-y-3">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Operações compartilhadas</p>
-          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
+          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
             Controle despesas sincronizadas com o seu grupo ativo
           </h1>
-          <p className="text-sm text-muted-foreground sm:text-base">
-            Cada ajuste aqui reflete imediatamente para todos os membros conectados e dispara notificações inteligentes.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {heroStats.map((stat) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 190, damping: 22 }}
-                className="glass-panel rounded-3xl border border-border/70 p-4"
-              >
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-                <p className="text-2xl font-semibold">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.helper}</p>
-              </motion.div>
-            ))}
-          </div>
+
+          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "stats"}>
+            <AccordionItem value="stats" className="border-none">
+              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold">Resumo</span>
+                  <span className="text-xs text-muted-foreground">Toque para ver estatísticas e detalhes</span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pt-3">
+                <p className="text-sm text-muted-foreground sm:text-base">
+                  Cada ajuste aqui reflete imediatamente para todos os membros conectados e dispara notificações.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {heroStats.map((stat) => (
+                    <motion.div
+                      key={stat.label}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 190, damping: 22 }}
+                      className="glass-panel rounded-3xl border border-border/70 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
+                      <p className="text-2xl font-semibold">{stat.value}</p>
+                      <p className="text-xs text-muted-foreground">{stat.helper}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </PageContainer>
 
@@ -514,24 +529,37 @@ export default function SharedExpenses() {
                       >
                         {e.expense.title}
                       </button>
-                      <span className="flex gap-1">
-                        {canEdit && (
-                          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => startEdit(e)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {isOwner && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl"
-                            onClick={() => handleDelete(e.expense.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </span>
+                      {(canEdit || isOwner) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            {canEdit && (
+                              <DropdownMenuItem onClick={() => startEdit(e)}>
+                                <span className="flex items-center gap-2">
+                                  <Pencil className="h-4 w-4" />
+                                  Editar
+                                </span>
+                              </DropdownMenuItem>
+                            )}
+                            {isOwner && (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(e.expense.id)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Trash2 className="h-4 w-4" />
+                                  Remover
+                                </span>
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </CardTitle>
                     <CardDescription className="flex flex-wrap items-center gap-2 text-sm">
                       {e.expense.category || 'Sem categoria'}

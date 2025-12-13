@@ -3,6 +3,14 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "predeploy": [
+      "pnpm --dir functions install",
+      "pnpm run build:functions"
+    ]
+  },
   "hosting": {
     "public": "dist/public",
     "ignore": [
@@ -13,10 +21,7 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "run": {
-          "serviceId": "despesas-api",
-          "region": "us-central1"
-        }
+        "function": "backend"
       },
       {
         "source": "**",

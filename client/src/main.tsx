@@ -98,11 +98,38 @@ const trpcClient = trpc.createClient({
           }
         }
 
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          headers,
-          credentials: "include",
-        });
+        let response: Response;
+        try {
+          response = await globalThis.fetch(input, {
+            ...(init ?? {}),
+            headers,
+            credentials: "include",
+          });
+        } catch (networkError) {
+          throw new Error(
+            isNativeRuntime
+              ? "Sem conexão com o servidor. Para o APK funcionar sem o PC ligado, publique o backend (tRPC) em um servidor/cloud e configure VITE_API_URL com a URL HTTPS."
+              : "Falha de rede ao chamar a API."
+          );
+        }
+
+        // Se a API responder HTML/texto (ex: 404/500/proxy), isso vira erro de JSON no cliente.
+        const contentType = response.headers.get("content-type") ?? "";
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw new Error(
+            `Erro da API (${response.status}). ${text ? text.slice(0, 180) : "Resposta vazia"}`
+          );
+        }
+
+        if (!contentType.includes("application/json")) {
+          const text = await response.text().catch(() => "");
+          throw new Error(
+            `Resposta inesperada da API (não-JSON). Verifique VITE_API_URL. ${text ? text.slice(0, 180) : ""}`
+          );
+        }
+
+        return response;
       },
     }),
   ],

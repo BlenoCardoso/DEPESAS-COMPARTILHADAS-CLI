@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -117,6 +118,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { currentGroup } = useCurrentGroup();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -283,6 +285,11 @@ function DashboardLayoutContent({
                     {activeMenuItem?.label ?? APP_TITLE}
                   </span>
                 </div>
+                {currentGroup && (
+                  <span className="hidden sm:inline-flex text-xs px-2 py-1 rounded bg-muted text-muted-foreground">
+                    Grupo: {currentGroup.name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -292,7 +299,3 @@ function DashboardLayoutContent({
     </>
   );
 }
-
-          {currentGroup && (
-            <span className="ml-2 text-xs px-2 py-1 rounded bg-muted text-muted-foreground">Grupo: {currentGroup.name}</span>
-          )}

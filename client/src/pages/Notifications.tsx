@@ -140,7 +140,7 @@ export default function Notifications() {
   const isEmptyState = !isLoading && (!notifications || notifications.length === 0);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <PageContainer className="app-hero space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -154,7 +154,7 @@ export default function Notifications() {
             <Bell className="h-6 w-6" />
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {heroStats.map((stat) => (
             <motion.div
               key={stat.label}
