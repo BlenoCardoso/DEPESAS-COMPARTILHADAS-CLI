@@ -11,19 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, MoreVertical, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
 import { formatCents, userLabel } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/useMobile";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 
 export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const groupId = currentGroup?.id ?? null;
+  const [, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // centavos (input em centavos para manter lógica de splits)
@@ -36,6 +39,22 @@ export default function SharedExpenses() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
+  const [segment, setSegment] = useState<"all" | "shared" | "personal" | "pending" | "paid">("shared");
+
+  useEffect(() => {
+    if (segment === "all" || segment === "personal") return;
+    if (filterStatus === "pending") {
+      setSegment("pending");
+      return;
+    }
+    if (filterStatus === "validated") {
+      setSegment("paid");
+      return;
+    }
+    if (!filterStatus) {
+      setSegment("shared");
+    }
+  }, [filterStatus, segment]);
   // edição
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -224,76 +243,129 @@ export default function SharedExpenses() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <PageContainer className="app-hero">
-        <div className="space-y-3">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Operações compartilhadas</p>
-          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
-            Controle despesas sincronizadas com o seu grupo ativo
-          </h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Despesas compartilhadas</h1>
+        <p className="text-sm text-muted-foreground">
+          {currentGroup ? `Grupo: ${currentGroup.name}` : "Selecione um grupo para ver as despesas."}
+        </p>
+      </div>
 
-          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "stats"}>
-            <AccordionItem value="stats" className="border-none">
-              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                <span className="flex flex-col items-start">
-                  <span className="text-sm font-semibold">Resumo</span>
-                  <span className="text-xs text-muted-foreground">Toque para ver estatísticas e detalhes</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="pt-3">
-                <p className="text-sm text-muted-foreground sm:text-base">
-                  Cada ajuste aqui reflete imediatamente para todos os membros conectados e dispara notificações.
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {heroStats.map((stat) => (
-                    <motion.div
-                      key={stat.label}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 190, damping: 22 }}
-                      className="glass-panel rounded-3xl border border-border/70 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-                      <p className="text-2xl font-semibold">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">{stat.helper}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </PageContainer>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup
+          type="single"
+          value={segment}
+          onValueChange={(v) => {
+            const next = (v || "shared") as typeof segment;
+            setSegment(next);
+            if (next === "personal") {
+              navigate("/personal-expenses");
+              return;
+            }
+            if (next === "all") {
+              setFilterText("");
+              setFilterCategory("");
+              setFilterStatus("");
+              setFilterStart("");
+              setFilterEnd("");
+              return;
+            }
+            if (next === "shared") {
+              setFilterStatus("");
+              return;
+            }
+            if (next === "pending") {
+              setFilterStatus("pending");
+              return;
+            }
+            if (next === "paid") {
+              // no backend: "validated" é o equivalente mais próximo de "paga" no fluxo atual
+              setFilterStatus("validated");
+            }
+          }}
+          className="w-full"
+          variant="outline"
+        >
+          <ToggleGroupItem value="all" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Todas
+          </ToggleGroupItem>
+          <ToggleGroupItem value="shared" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Compart.
+          </ToggleGroupItem>
+          <ToggleGroupItem value="personal" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Pessoais
+          </ToggleGroupItem>
+          <ToggleGroupItem value="pending" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Pendentes
+          </ToggleGroupItem>
+          <ToggleGroupItem value="paid" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Pagas
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
-      <PageContainer className="glass-panel space-y-4 rounded-3xl border border-border/70 bg-card/70">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Configurar grupo e filtros</h2>
-            <p className="text-sm text-muted-foreground">Escolha o grupo ativo, aplique filtros e registre novas despesas.</p>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-            <Select value={groupId ?? undefined} onValueChange={v => setCurrentGroupId(v)}>
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <SelectValue placeholder="Selecione grupo" />
+      <Accordion type="single" collapsible defaultValue={undefined}>
+        <AccordionItem value="stats" className="border-none">
+          <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Resumo</span>
+              <span className="text-xs text-muted-foreground">Totais e pendências</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Itens</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{expensesList.length}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="mt-1 truncate text-base font-semibold leading-tight">{formatCents(totalAmount)}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Pendentes</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{pendingCount}</p>
+                </CardContent>
+              </Card>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <PageContainer className="rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex-1">
+            <Select value={groupId ?? undefined} onValueChange={(v) => setCurrentGroupId(v)}>
+              <SelectTrigger className="w-full rounded-2xl">
+                <SelectValue placeholder="Selecionar grupo" />
               </SelectTrigger>
               <SelectContent>
-                {groupsList.map(g => (
-                  <SelectItem key={g.group.id} value={g.group.id}>{g.group.name}</SelectItem>
+                {groupsList.map((g) => (
+                  <SelectItem key={g.group.id} value={g.group.id}>
+                    {g.group.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Dialog
-              open={isCreateOpen}
-              onOpenChange={open => {
-                setIsCreateOpen(open);
-                if (!open) setAllowMemberEdits(false);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button disabled={!groupId} className="w-full gap-2 sm:w-auto">
-                  <Plus className="h-4 w-4" /> Nova despesa
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
+          </div>
+
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={(open) => {
+              setIsCreateOpen(open);
+              if (!open) setAllowMemberEdits(false);
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button disabled={!groupId} className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto">
+                <Plus className="h-4 w-4" /> Nova despesa
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova Despesa</DialogTitle>
                   <DialogDescription>Divida automaticamente entre membros do grupo</DialogDescription>
@@ -346,45 +418,68 @@ export default function SharedExpenses() {
                   </Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
-            <Button
-              variant="outline"
-              className="w-full gap-2 sm:hidden"
-              onClick={() => setFiltersOpen(prev => !prev)}
-            >
-              <SlidersHorizontal className="h-4 w-4" /> {filtersOpen ? "Ocultar filtros" : "Mostrar filtros"}
-            </Button>
-          </div>
+          </Dialog>
         </div>
-        <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${isMobile && !filtersOpen ? "hidden" : ""}`}>
-          <div className="space-y-1">
-            <Label className="text-xs">Busca</Label>
-            <Input value={filterText} onChange={e => setFilterText(e.target.value)} placeholder="Título" className="w-full" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Categoria</Label>
-            <Input value={filterCategory} onChange={e => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Status</Label>
-            <Select value={filterStatus || undefined} onValueChange={v => setFilterStatus(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="validated">Validada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Início</Label>
-            <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-full" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Fim</Label>
-            <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="w-full" />
-          </div>
-        </div>
+
+        <Accordion type="single" collapsible value={filtersOpen ? "filters" : undefined} onValueChange={(v) => setFiltersOpen(v === "filters")}>
+          <AccordionItem value="filters" className="mt-2 border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-background/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Filtros</span>
+                <span className="text-xs text-muted-foreground">Busca, categoria, status e período</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Busca</Label>
+                  <Input value={filterText} onChange={(e) => setFilterText(e.target.value)} placeholder="Título" className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Categoria</Label>
+                  <Input value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Status</Label>
+                  <Select value={filterStatus || undefined} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-full rounded-2xl"><SelectValue placeholder="Todos" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="validated">Validada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Início</Label>
+                  <Input type="date" value={filterStart} onChange={(e) => setFilterStart(e.target.value)} className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fim</Label>
+                  <Input type="date" value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} className="w-full rounded-2xl" />
+                </div>
+                {(filterText || filterCategory || filterStatus || filterStart || filterEnd) && (
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="interactive-tap w-full rounded-2xl"
+                      onClick={() => {
+                        setFilterText("");
+                        setFilterCategory("");
+                        setFilterStatus("");
+                        setFilterStart("");
+                        setFilterEnd("");
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </PageContainer>
 
       {/* Dialog de edição */}
@@ -508,80 +603,78 @@ export default function SharedExpenses() {
           />
         </PageContainer>
       ) : (
-        <PageContainer className="grid gap-4 md:grid-cols-2">
+        <PageContainer className="space-y-2">
           {expensesList.map(e => {
             const isOwner = e.expense.createdBy === user?.id;
             const canEdit = isOwner || (!!e.expense.allowMemberEdits && !!user?.id);
             return (
               <motion.div
                 key={e.expense.id}
-                initial={{ opacity: 0, y: 24 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ type: "spring", stiffness: 170, damping: 20 }}
               >
-                <Card className="interactive-card rounded-3xl border border-border/60 bg-card/80">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-start justify-between gap-3 text-lg">
+                <Card className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
                       <button
                         type="button"
-                        className="text-left underline-offset-4 hover:underline"
+                        className="min-w-0 flex-1 text-left"
                         onClick={() => openDetail(e)}
                       >
-                        {e.expense.title}
+                        <p className="truncate text-sm font-semibold underline-offset-4 hover:underline">
+                          {e.expense.title}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Badge variant={e.expense.status === "validated" ? "secondary" : "outline"} className="rounded-full text-[11px]">
+                            {e.expense.status === "validated" ? "Paga" : "Pendente"}
+                          </Badge>
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(e.expense.date).toLocaleDateString("pt-BR")}
+                          </span>
+                          {e.expense.category ? (
+                            <span className="text-[11px] text-muted-foreground">{e.expense.category}</span>
+                          ) : null}
+                        </div>
                       </button>
-                      {(canEdit || isOwner) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            {canEdit && (
-                              <DropdownMenuItem onClick={() => startEdit(e)}>
-                                <span className="flex items-center gap-2">
-                                  <Pencil className="h-4 w-4" />
-                                  Editar
-                                </span>
-                              </DropdownMenuItem>
-                            )}
-                            {isOwner && (
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(e.expense.id)}
-                                disabled={deleteMutation.isPending}
-                              >
-                                <span className="flex items-center gap-2">
-                                  <Trash2 className="h-4 w-4" />
-                                  Remover
-                                </span>
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </CardTitle>
-                    <CardDescription className="flex flex-wrap items-center gap-2 text-sm">
-                      {e.expense.category || 'Sem categoria'}
-                      <Badge variant={e.expense.allowMemberEdits ? "secondary" : "outline"} className="text-[11px]">
-                        {e.expense.allowMemberEdits ? "Edição liberada" : "Somente criador"}
-                      </Badge>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span>Valor total</span>
-                      <span className="font-semibold">{formatCents(e.expense.amount)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Data</span>
-                      <span>{new Date(e.expense.date).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Status</span>
-                      <Badge variant={e.expense.status === 'validated' ? "secondary" : "outline"}>
-                        {e.expense.status}
-                      </Badge>
+
+                      <div className="flex items-center gap-1">
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{formatCents(e.expense.amount)}</p>
+                          <p className="text-[11px] text-muted-foreground">total</p>
+                        </div>
+                        {(canEdit || isOwner) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="interactive-tap h-9 w-9 rounded-2xl" aria-label="Mais opções">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              {canEdit && (
+                                <DropdownMenuItem onClick={() => startEdit(e)}>
+                                  <span className="flex items-center gap-2">
+                                    <Pencil className="h-4 w-4" />
+                                    Editar
+                                  </span>
+                                </DropdownMenuItem>
+                              )}
+                              {isOwner && (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(e.expense.id)}
+                                  disabled={deleteMutation.isPending}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <Trash2 className="h-4 w-4" />
+                                    Remover
+                                  </span>
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

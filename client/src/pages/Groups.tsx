@@ -2,17 +2,18 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
+import { Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import { Link, useLocation } from "wouter";
 export default function Groups() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
+  const [listFilter, setListFilter] = useState<"all" | "active">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,23 +38,16 @@ export default function Groups() {
 
   const groupsList = Array.isArray(groups) ? groups : [];
 
-  const heroHighlights = [
-    {
-      label: "Grupos ativos",
-      value: groupsList.length,
-      helper: groupsList.length === 1 ? "grupo sincronizado" : "grupos sincronizados",
-    },
-    {
-      label: "Grupo selecionado",
-      value: currentGroup?.name ?? "Nenhum",
-      helper: currentGroup ? "Sincronizado com Firebase" : "Escolha um grupo abaixo",
-    },
-    {
-      label: "Convites",
-      value: "E-mail + link",
-      helper: "Envie convites inteligentes",
-    },
-  ];
+  const visibleGroups = listFilter === "active"
+    ? groupsList.filter((g) => g?.group?.id && g.group.id === currentGroup?.id)
+    : groupsList;
+
+  const membersQuery = trpc.groups.getMembers.useQuery(
+    { groupId: currentGroup?.id ?? "" },
+    { enabled: isAuthenticated && Boolean(currentGroup?.id) }
+  );
+
+  const selectedMembersCount = membersQuery.data?.length ?? 0;
 
   const createMutation = trpc.groups.create.useMutation({
     onSuccess: () => {
@@ -121,112 +116,141 @@ export default function Groups() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <PageContainer className="app-hero">
-        <div className="space-y-3">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Gestão de grupos</p>
-          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">
-            Centralize grupos, convites e regras em um único painel
-          </h1>
-
-          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "highlights"}>
-            <AccordionItem value="highlights" className="border-none">
-              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                <span className="flex flex-col items-start">
-                  <span className="text-sm font-semibold">Resumo</span>
-                  <span className="text-xs text-muted-foreground">Toque para ver detalhes e estatísticas</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="pt-3">
-                <p className="text-sm text-muted-foreground sm:text-base">
-                  Conectado ao Firebase em tempo real para sincronizar convites, listas de membros e permissões.
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {heroHighlights.map((item) => (
-                    <motion.div
-                      key={item.label}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 180, damping: 20 }}
-                      className="glass-panel rounded-3xl border border-border/70 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{item.label}</p>
-                      <p className="text-2xl font-semibold">{item.value}</p>
-                      <p className="text-xs text-muted-foreground">{item.helper}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </PageContainer>
-
-      <PageContainer className="glass-panel space-y-4 rounded-3xl border border-border/70 bg-card/70">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <h2 className="text-xl font-semibold">Configurar grupos</h2>
-            <p className="text-sm text-muted-foreground">Crie novos espaços, convide membros e defina o grupo ativo.</p>
-          </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full gap-2 sm:w-auto">
-                <Plus className="h-4 w-4" />
-                Novo Grupo
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Novo Grupo</DialogTitle>
-                <DialogDescription>
-                  Compartilhe despesas com amigos, família ou colegas
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome do Grupo *</Label>
-                  <Input
-                    id="name"
-                    placeholder="Ex: Apartamento, Viagem, etc."
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Descreva o propósito do grupo..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Criar Grupo
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
-          <p>
-            O grupo selecionado define quais despesas aparecem na tela de compartilhadas e quais membros recebem notificações.
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <h1 className="text-2xl font-semibold sm:text-3xl">Grupos</h1>
+          <p className="text-xs text-muted-foreground">
+            {currentGroup ? (
+              <span className="truncate">Ativo: {currentGroup.name}</span>
+            ) : (
+              "Selecione um grupo para começar."
+            )}
           </p>
         </div>
-      </PageContainer>
+
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="interactive-tap gap-2 rounded-2xl">
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Criar Novo Grupo</DialogTitle>
+              <DialogDescription>
+                Compartilhe despesas com amigos, família ou colegas
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do Grupo *</Label>
+                <Input
+                  id="name"
+                  placeholder="Ex: Apartamento, Viagem, etc."
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrição (opcional)</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Descreva o propósito do grupo..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Criar Grupo
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "summary"}>
+        <AccordionItem value="summary" className="border-none">
+          <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Resumo</span>
+              <span className="text-xs text-muted-foreground">Total, grupo atual e membros</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{groupsList.length}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Selecionado</p>
+                  <p className="mt-1 truncate text-base font-semibold leading-tight">{currentGroup?.name ?? "—"}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Membros</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">
+                    {currentGroup ? selectedMembersCount : "—"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="help" className="border-none">
+          <AccordionTrigger className="mt-2 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Como funciona</span>
+              <span className="text-xs text-muted-foreground">O grupo controla despesas e notificações</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <p className="text-sm text-muted-foreground">
+              O grupo ativo define quais despesas aparecem em “Compart.” e quais membros recebem notificações.
+            </p>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup
+          type="single"
+          value={listFilter}
+          onValueChange={(v) => setListFilter(((v || "all") as any) ?? "all")}
+          className="w-full"
+          variant="outline"
+        >
+          <ToggleGroupItem value="all" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Todos
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="active"
+            className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
+            disabled={!currentGroup}
+          >
+            Ativo
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
       {groupsList.length === 0 ? (
         <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
           <EmptyState
             title="Nenhum grupo encontrado"
-            description="Crie um espaço para começar a dividir despesas, acompanhar recibos e enviar convites inteligentes."
-            hint="Sincroniza com Firebase e envia notificações push"
+            description="Crie seu primeiro grupo para começar a dividir despesas."
             cta={
               <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -235,43 +259,67 @@ export default function Groups() {
             }
           />
         </PageContainer>
+      ) : visibleGroups.length === 0 ? (
+        <PageContainer className="rounded-2xl border border-border/60 bg-card/60">
+          <CardContent className="p-6 text-center">
+            <p className="text-sm text-muted-foreground">Nenhum grupo ativo selecionado.</p>
+          </CardContent>
+        </PageContainer>
       ) : (
-        <PageContainer className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {groupsList.map((item) => (
-            <motion.div
-              key={item.group.id}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 160, damping: 18 }}
-            >
-              <Card className="interactive-card rounded-3xl border border-border/60 bg-card/80">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Users className="h-5 w-5 text-primary" />
-                        {item.group.name}
-                      </CardTitle>
-                      {item.group.description && (
-                        <CardDescription>{item.group.description}</CardDescription>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Criado em {new Date(item.group.createdAt).toLocaleDateString("pt-BR")}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+        <PageContainer className="space-y-2">
+          {visibleGroups.map((item) => {
+            const isActive = currentGroup?.id === item.group.id;
+            return (
+              <motion.div
+                key={item.group.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 180, damping: 20 }}
+              >
+                <Card
+                  className={
+                    "interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md " +
+                    (isActive ? "border-primary/40 bg-primary/5" : "")
+                  }
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <span className={"rounded-2xl p-2 " + (isActive ? "bg-primary/15 text-primary" : "bg-muted text-foreground")}>
+                        <Users className="h-4 w-4" />
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold">{item.group.name}</p>
+                          {isActive ? (
+                            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              Ativo
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Criado em {new Date(item.group.createdAt).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+
                       <Button
-                        size="sm"
-                        className="gap-1"
-                        variant={currentGroup?.id === item.group.id ? "secondary" : "default"}
+                        size="icon"
+                        className="interactive-tap h-9 w-9 rounded-2xl"
+                        variant={isActive ? "secondary" : "default"}
                         onClick={() => handleEnterGroup(item.group.id)}
+                        aria-label="Entrar no grupo"
                       >
                         <LogIn className="h-4 w-4" />
-                        Entrar
                       </Button>
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="rounded-xl border border-border/60" aria-label="Mais opções">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="interactive-tap h-9 w-9 rounded-2xl"
+                            aria-label="Mais opções"
+                          >
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -308,20 +356,11 @@ export default function Groups() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between pt-0 text-sm">
-                  <span className="text-muted-foreground">Controles rápidos</span>
-                  <Button asChild variant="ghost" size="sm" className="gap-1 text-primary">
-                    <Link href={`/groups/${item.group.id}`}>
-                      Configurar
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </PageContainer>
       )}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

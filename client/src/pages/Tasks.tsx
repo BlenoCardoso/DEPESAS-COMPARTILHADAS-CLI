@@ -2,15 +2,18 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, Check, CheckCircle2, Flame, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { ReactNode, useState } from "react";
+import { CheckCircle2, Circle, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export default function Tasks() {
@@ -19,29 +22,23 @@ export default function Tasks() {
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "done">("all");
+  const [filterText, setFilterText] = useState("");
 
   const { data: tasks, isLoading, refetch } = trpc.tasks.list.useQuery(undefined, { enabled: isAuthenticated });
   const tasksList = Array.isArray(tasks) ? tasks : [];
   const completedCount = tasksList.filter((t: any) => Boolean(t?.completed)).length;
   const pendingCount = tasksList.length - completedCount;
 
-  const heroStats = [
-    {
-      label: "Total",
-      value: tasksList.length,
-      helper: tasksList.length === 1 ? "tarefa registrada" : "tarefas registradas",
-    },
-    {
-      label: "Pendentes",
-      value: pendingCount,
-      helper: pendingCount === 1 ? "item para concluir" : "itens para concluir",
-    },
-    {
-      label: "Concluídas",
-      value: completedCount,
-      helper: "Histórico do seu dia",
-    },
-  ];
+  const heroStats = useMemo(
+    () => [
+      { label: "Total", value: tasksList.length },
+      { label: "Pendentes", value: pendingCount },
+      { label: "Concluídas", value: completedCount },
+    ],
+    [tasksList.length, pendingCount, completedCount]
+  );
 
   const createMutation = trpc.tasks.create.useMutation({
     onSuccess: () => { toast.success("Tarefa criada"); setIsCreateOpen(false); setTitle(""); setPriority("medium"); setDueDate(""); refetch(); },
@@ -57,60 +54,73 @@ export default function Tasks() {
   const handleDelete = (id: string) => { if (confirm("Remover tarefa?")) deleteMutation.mutate({ id }); };
   const handleToggle = (id: string, completed: boolean) => toggleMutation.mutate({ id, completed: !completed });
 
-  const priorityStyles: Record<string, { label: string; gradient: string; icon: ReactNode }> = {
-    low: {
-      label: "Baixa",
-      gradient: "from-secondary/30 to-secondary/5",
-      icon: <Check className="h-4 w-4" />,
-    },
-    medium: {
-      label: "Média",
-      gradient: "from-primary/25 to-primary/5",
-      icon: <AlertCircle className="h-4 w-4" />,
-    },
-    high: {
-      label: "Alta",
-      gradient: "from-destructive/25 to-destructive/5",
-      icon: <Flame className="h-4 w-4" />,
-    },
+  const priorityLabel: Record<string, string> = {
+    low: "Baixa",
+    medium: "Média",
+    high: "Alta",
   };
 
-  const getCardGradient = (priority: string, completed: boolean) => {
-    if (completed) return "bg-muted";
-    return `bg-gradient-to-br ${priorityStyles[priority]?.gradient ?? 'from-muted to-card'}`;
+  const priorityBadgeClass: Record<string, string> = {
+    low: "bg-muted text-foreground",
+    medium: "bg-primary/10 text-primary",
+    high: "bg-secondary/20 text-foreground",
   };
+
+  const visibleTasks = useMemo(() => {
+    let list = tasksList;
+    if (statusFilter !== "all") {
+      list = list.filter((t: any) => (statusFilter === "done" ? Boolean(t?.completed) : !Boolean(t?.completed)));
+    }
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      list = list.filter((t: any) => String(t?.title || "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [tasksList, statusFilter, filterText]);
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <PageContainer className="app-hero">
-        <div className="space-y-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Produtividade</p>
-          <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">Tarefas com foco e clareza</h1>
-          <p className="text-sm text-muted-foreground sm:text-base">Organize prioridades e acompanhe o que falta concluir.</p>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Tarefas com foco e clareza</h1>
+        <p className="text-sm text-muted-foreground">Organize o que precisa fazer para o grupo.</p>
+      </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {heroStats.map((stat) => (
-              <div key={stat.label} className="glass-panel rounded-3xl border border-border/70 p-4">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-                <p className="text-2xl font-semibold">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.helper}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </PageContainer>
+      <Accordion type="single" collapsible defaultValue={undefined}>
+        <AccordionItem value="stats" className="border-none">
+          <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Resumo</span>
+              <span className="text-xs text-muted-foreground">
+                Total {tasksList.length} • Pendentes {pendingCount} • Concluídas {completedCount}
+              </span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <div className="grid grid-cols-3 gap-2">
+              {heroStats.map((stat) => (
+                <Card key={stat.label} className="rounded-2xl border bg-card shadow-sm">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    <p className="mt-1 text-2xl font-bold leading-none">{stat.value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
-      <PageContainer className="glass-panel space-y-4 rounded-3xl border border-border/70 bg-card/70">
+      <PageContainer className="glass-panel space-y-3 rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Ações rápidas</h2>
-            <p className="text-sm text-muted-foreground">Crie novas tarefas e mantenha o painel sempre leve no celular.</p>
+            <p className="text-sm font-semibold">Ações</p>
+            <p className="text-xs text-muted-foreground">Crie e filtre sem poluir a tela.</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="w-full gap-2 sm:w-auto">
+              <Button className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto">
                 <Plus className="h-4 w-4" />
-                Nova tarefa
+                + Nova tarefa
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -151,84 +161,161 @@ export default function Tasks() {
             </DialogContent>
           </Dialog>
         </div>
+
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-background/60 p-1">
+          <ToggleGroup
+            type="single"
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter((v as any) || "all")}
+            className="w-full"
+            variant="outline"
+          >
+            <ToggleGroupItem value="all" className="flex-1 rounded-xl">
+              Todas
+            </ToggleGroupItem>
+            <ToggleGroupItem value="pending" className="flex-1 rounded-xl">
+              Pendentes
+            </ToggleGroupItem>
+            <ToggleGroupItem value="done" className="flex-1 rounded-xl">
+              Concluídas
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <Accordion
+          type="single"
+          collapsible
+          value={filtersOpen ? "filters" : undefined}
+          onValueChange={(v) => setFiltersOpen(v === "filters")}
+        >
+          <AccordionItem value="filters" className="border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-background/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Filtros</span>
+                <span className="text-xs text-muted-foreground">Busca rápida por título</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Busca</Label>
+                  <Input
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    placeholder="Digite para filtrar"
+                    className="w-full rounded-2xl"
+                  />
+                </div>
+                {(filterText || statusFilter !== "all") && (
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="interactive-tap w-full rounded-2xl"
+                      onClick={() => {
+                        setFilterText("");
+                        setStatusFilter("all");
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </PageContainer>
 
       {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      ) : tasksList.length === 0 ? (
+      ) : visibleTasks.length === 0 ? (
         <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
           <EmptyState
             title="Nenhuma tarefa"
-            description="Crie sua primeira tarefa e acompanhe prioridades sem bagunça na tela."
+            description={tasksList.length === 0 ? "Crie sua primeira tarefa." : "Nenhuma tarefa com esses filtros."}
             cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Criar primeira</Button>}
           />
         </PageContainer>
       ) : (
-        <PageContainer className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-          {tasksList.map((t: any) => {
-            const priority = t?.priority || "medium";
+        <PageContainer className="space-y-2">
+          {visibleTasks.map((t: any) => {
+            const taskPriority = t?.priority || "medium";
             const completed = Boolean(t?.completed);
+
             return (
               <Card
                 key={t.id}
-                className={`rounded-3xl border border-border/60 shadow-sm transition-all interactive-card ${
-                  completed ? "opacity-70" : "opacity-100"
-                } ${getCardGradient(priority, completed)}`}
+                className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
               >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-start justify-between gap-3 text-lg">
-                    <span className="flex items-center gap-2">
+                <CardContent className={"p-3 " + (completed ? "opacity-70" : "opacity-100")}>
+                  <div className="flex items-start gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="interactive-tap h-9 w-9 rounded-2xl"
+                      onClick={() => handleToggle(t.id, completed)}
+                      disabled={toggleMutation.isPending}
+                      aria-label={completed ? "Reabrir" : "Concluir"}
+                    >
                       {completed ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
                       ) : (
-                        <span className="rounded-xl bg-white/60 p-1 text-xs text-primary">
-                          {priorityStyles[priority]?.icon}
-                        </span>
+                        <Circle className="h-5 w-5 text-muted-foreground" />
                       )}
-                      {t?.title}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-xl interactive-tap"
-                        onClick={() => handleToggle(t.id, completed)}
-                        disabled={toggleMutation.isPending}
-                        aria-label={completed ? "Reabrir" : "Concluir"}
-                      >
-                        {completed ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-xl interactive-tap"
-                        onClick={() => handleDelete(t.id)}
-                        disabled={deleteMutation.isPending}
-                        aria-label="Remover"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    </Button>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{t?.title}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge
+                          className={
+                            "h-5 rounded-full px-2 text-[11px] " +
+                            (priorityBadgeClass[taskPriority] ?? priorityBadgeClass.medium)
+                          }
+                        >
+                          {priorityLabel[taskPriority] ?? taskPriority}
+                        </Badge>
+                        {t?.dueDate ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            Até {new Date(t.dueDate).toLocaleDateString("pt-BR")}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  </CardTitle>
-                  <div className="flex items-center gap-2 text-xs">
-                    <Badge variant="secondary" className="capitalize bg-white/30 text-foreground">
-                      {priorityStyles[priority]?.label ?? priority}
-                    </Badge>
-                    {completed && <Badge variant="outline">Concluída</Badge>}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-1 text-sm">
-                  {t?.dueDate && (
-                    <div className="flex justify-between">
-                      <span>Prazo</span>
-                      <span>{new Date(t.dueDate).toLocaleDateString("pt-BR")}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Status</span>
-                    <span>{completed ? "Concluída" : "Pendente"}</span>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="interactive-tap h-9 w-9 rounded-2xl"
+                          aria-label="Mais opções"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => handleToggle(t.id, completed)} disabled={toggleMutation.isPending}>
+                          <span className="flex items-center gap-2">
+                            {completed ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                            {completed ? "Reabrir" : "Concluir"}
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDelete(t.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Remover
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>

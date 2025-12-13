@@ -2,23 +2,26 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/useMobile";
+import { useLocation } from "wouter";
 
 export default function PersonalExpenses() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
+  const [, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // valor em reais (string)
@@ -26,18 +29,45 @@ export default function PersonalExpenses() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [category, setCategory] = useState("");
   const [date, setDate] = useState<string>(() => new Date().toISOString().substring(0, 10));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterText, setFilterText] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterStart, setFilterStart] = useState("");
+  const [filterEnd, setFilterEnd] = useState("");
 
   const { data: expenses, isLoading, refetch } = trpc.personalExpenses.list.useQuery(undefined, { enabled: isAuthenticated });
   const expensesList = (expenses as any[]) ?? [];
-  const totalAmount = expensesList.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const lastUpdate = expensesList[0]?.updatedAt
-    ? new Date(expensesList[0].updatedAt).toLocaleDateString("pt-BR")
+
+  const visibleExpenses = useMemo(() => {
+    let list = expensesList;
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      list = list.filter((e) => String(e?.title || "").toLowerCase().includes(q));
+    }
+    if (filterCategory) {
+      const q = filterCategory.toLowerCase();
+      list = list.filter((e) => String(e?.category || "").toLowerCase().includes(q));
+    }
+    if (filterStart) {
+      const start = new Date(filterStart);
+      list = list.filter((e) => (e?.date ? new Date(e.date) >= start : false));
+    }
+    if (filterEnd) {
+      const end = new Date(filterEnd);
+      list = list.filter((e) => (e?.date ? new Date(e.date) <= end : false));
+    }
+    return list;
+  }, [expensesList, filterCategory, filterEnd, filterStart, filterText]);
+
+  const totalAmount = visibleExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const lastUpdate = (visibleExpenses[0] as any)?.updatedAt
+    ? new Date((visibleExpenses[0] as any).updatedAt).toLocaleDateString("pt-BR")
     : new Date().toLocaleDateString("pt-BR");
   const heroStats = [
     {
       label: "Lançamentos",
-      value: expensesList.length,
-      helper: expensesList.length === 1 ? "item registrado" : "itens registrados",
+      value: visibleExpenses.length,
+      helper: visibleExpenses.length === 1 ? "item" : "itens",
     },
     {
       label: "Total acumulado",
@@ -98,50 +128,78 @@ export default function PersonalExpenses() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <PageContainer className="app-hero">
-        <div className="space-y-3">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Finanças pessoais</p>
-          <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">Despesas pessoais</h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Despesas pessoais</h1>
+        <p className="text-sm text-muted-foreground">Lançamentos pessoais, rápidos e organizados.</p>
+      </div>
 
-          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "stats"}>
-            <AccordionItem value="stats" className="border-none">
-              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                <span className="flex flex-col items-start">
-                  <span className="text-sm font-semibold">Resumo</span>
-                  <span className="text-xs text-muted-foreground">Toque para ver estatísticas</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="pt-3">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {heroStats.map((stat) => (
-                    <motion.div
-                      key={stat.label}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 200, damping: 22 }}
-                      className="glass-panel rounded-3xl border border-border/70 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-                      <p className="text-2xl font-semibold">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">{stat.helper}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </PageContainer>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup type="single" value="personal" className="w-full" variant="outline">
+          <ToggleGroupItem
+            value="shared"
+            className="flex-1 rounded-xl"
+            onClick={() => navigate("/shared-expenses")}
+          >
+            Compart.
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="personal"
+            className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
+          >
+            Pessoais
+          </ToggleGroupItem>
+          <ToggleGroupItem value="pending" className="flex-1 rounded-xl" disabled>
+            Pendentes
+          </ToggleGroupItem>
+          <ToggleGroupItem value="paid" className="flex-1 rounded-xl" disabled>
+            Pagas
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
-      <PageContainer className="glass-panel rounded-3xl border border-border/70 bg-card/70">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Registrar despesas</h2>
-            <p className="text-sm text-muted-foreground">Cadastre novos itens ou edite lançamentos existentes.</p>
+      <Accordion type="single" collapsible defaultValue={undefined}>
+        <AccordionItem value="stats" className="border-none">
+          <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Resumo</span>
+              <span className="text-xs text-muted-foreground">Totais e última atualização</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Itens</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{visibleExpenses.length}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="mt-1 truncate text-base font-semibold leading-tight">{formatCents(totalAmount)}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Atualizado</p>
+                  <p className="mt-1 truncate text-base font-semibold leading-tight">{lastUpdate}</p>
+                </CardContent>
+              </Card>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <PageContainer className="rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Ações</p>
+            <p className="text-xs text-muted-foreground">Crie e filtre lançamentos.</p>
           </div>
+
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="w-full gap-2 sm:w-auto"><Plus className="h-4 w-4" /> Nova despesa</Button>
+              <Button className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto"><Plus className="h-4 w-4" /> Nova despesa</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -161,6 +219,54 @@ export default function PersonalExpenses() {
             </DialogContent>
           </Dialog>
         </div>
+
+        <Accordion type="single" collapsible value={filtersOpen ? "filters" : undefined} onValueChange={(v) => setFiltersOpen(v === "filters")}>
+          <AccordionItem value="filters" className="mt-2 border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-background/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Filtros</span>
+                <span className="text-xs text-muted-foreground">Busca, categoria e período</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Busca</Label>
+                  <Input value={filterText} onChange={(e) => setFilterText(e.target.value)} placeholder="Título" className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Categoria</Label>
+                  <Input value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Início</Label>
+                  <Input type="date" value={filterStart} onChange={(e) => setFilterStart(e.target.value)} className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fim</Label>
+                  <Input type="date" value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} className="w-full rounded-2xl" />
+                </div>
+                {(filterText || filterCategory || filterStart || filterEnd) && (
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="interactive-tap w-full rounded-2xl"
+                      onClick={() => {
+                        setFilterText("");
+                        setFilterCategory("");
+                        setFilterStart("");
+                        setFilterEnd("");
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </PageContainer>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -184,58 +290,70 @@ export default function PersonalExpenses() {
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
-      ) : expensesList.length === 0 ? (
+      ) : visibleExpenses.length === 0 ? (
         <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
           <EmptyState
             title="Sem despesas registradas"
-            description="Organize recibos pessoais, metas e comprovantes em um só lugar."
+            description="Registre seus lançamentos pessoais." 
             cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Adicionar agora</Button>}
           />
         </PageContainer>
       ) : (
-        <PageContainer className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {expensesList.map((item: any) => (
+        <PageContainer className="space-y-2">
+          {visibleExpenses.map((item: any) => (
             <motion.div
               key={item.id}
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 170, damping: 20 }}
             >
-              <Card className="interactive-card rounded-3xl border border-border/60 bg-card/80">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-start justify-between gap-3 text-lg">
-                    <span>{item.title}</span>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => startEdit(item)}>
-                          <span className="flex items-center gap-2">
-                            <Pencil className="h-4 w-4" />
-                            Editar
-                          </span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleDelete(item.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <span className="flex items-center gap-2">
-                            <Trash2 className="h-4 w-4" />
-                            Remover
-                          </span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </CardTitle>
-                  <CardDescription>{item.category || 'Sem categoria'}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span>Valor</span><span className="font-semibold">{formatCents(item.amount)}</span></div>
-                  <div className="flex items-center justify-between"><span>Data</span><span>{item.date ? new Date(item.date).toLocaleDateString('pt-BR') : '-'}</span></div>
+              <Card className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{item.title}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                          {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                        </span>
+                        {item.category ? (
+                          <span className="text-[11px] text-muted-foreground">{item.category}</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{formatCents(item.amount)}</p>
+                        <p className="text-[11px] text-muted-foreground">total</p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="interactive-tap h-9 w-9 rounded-2xl" aria-label="Mais opções">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => startEdit(item)}>
+                            <span className="flex items-center gap-2">
+                              <Pencil className="h-4 w-4" />
+                              Editar
+                            </span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(item.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Trash2 className="h-4 w-4" />
+                              Remover
+                            </span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>

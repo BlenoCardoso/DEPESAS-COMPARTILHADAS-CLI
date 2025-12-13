@@ -1,8 +1,20 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { motion } from "framer-motion";
 import {
@@ -10,9 +22,12 @@ import {
   Bell,
   Check,
   CheckCheck,
+  ChevronRight,
   ClipboardList,
   CreditCard,
+  Filter,
   Loader2,
+  MoreVertical,
   RefreshCw,
   Users,
 } from "lucide-react";
@@ -65,6 +80,8 @@ export default function Notifications() {
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "invitation" | "reminder" | "validation" | "task">("all");
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const notificationsInput = { unreadOnly: showUnreadOnly };
   const {
@@ -87,19 +104,14 @@ export default function Notifications() {
   const totalNotifications = notifications?.length ?? 0;
   const unreadCount = notifications?.filter((notification: any) => !notification.read).length ?? 0;
 
-  const heroStats = [
-    { label: "Notificacoes", value: isLoading ? "--" : totalNotifications, helper: "Sincronizadas do Firebase" },
-    {
-      label: "Nao lidas",
-      value: isLoading ? "--" : unreadCount,
-      helper: unreadCount === 1 ? "alerta pendente" : "alertas pendentes",
-    },
-    {
-      label: "Filtro",
-      value: showUnreadOnly ? "Apenas nao lidas" : "Todas",
-      helper: "Atualize em tempo real",
-    },
-  ];
+  const typeLabels: Record<string, string> = {
+    all: "Tipo",
+    expense: "Desp.",
+    invitation: "Conv.",
+    reminder: "Lembr.",
+    validation: "Valid.",
+    task: "Tarefas",
+  };
 
   const invalidateNotifications = async () => {
     await Promise.all([
@@ -138,90 +150,141 @@ export default function Notifications() {
   };
 
   const isEmptyState = !isLoading && (!notifications || notifications.length === 0);
+  const filteredNotifications = (notifications || []).filter((notification: any) => {
+    if (typeFilter === "all") return true;
+    return notification.type === typeFilter;
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <PageContainer className="app-hero space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Central de alertas</p>
-            <h1 className="text-3xl font-semibold sm:text-4xl">Convites, despesas e lembretes em tempo real</h1>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              Toda movimentacao importante vira uma notificacao que voce pode acompanhar, abrir e marcar como lida.
-            </p>
-          </div>
-          <div className="hidden h-12 w-12 items-center justify-center rounded-2xl gradient-secondary text-white shadow-lg sm:flex">
-            <Bell className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {heroStats.map((stat) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 22 }}
-              className="glass-panel rounded-3xl border border-border/70 p-4"
-            >
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">{stat.label}</p>
-              <p className="text-2xl font-semibold">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.helper}</p>
-            </motion.div>
-          ))}
-        </div>
-      </PageContainer>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Notificações</h1>
+        <p className="text-sm text-muted-foreground">Alertas de convites, despesas, tarefas e lembretes.</p>
+      </div>
 
-      <PageContainer className="glass-panel space-y-4 rounded-3xl border border-border/70 bg-card/70">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Filtros e acoes</h2>
-            <p className="text-sm text-muted-foreground">
-              Escolha entre todas as notificacoes ou somente nao lidas, atualize os dados e limpe a fila quando quiser.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              variant={showUnreadOnly ? "default" : "outline"}
-              onClick={() => setShowUnreadOnly(!showUnreadOnly)}
-              className="gap-2 w-full sm:w-auto interactive-tap"
-            >
-              <Bell className="h-4 w-4" />
-              {showUnreadOnly ? "Ver todas" : "Apenas nao lidas"}
-            </Button>
-            <Button
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+            <ToggleGroup
+              type="single"
+              value={showUnreadOnly ? "unread" : "all"}
+              onValueChange={(v) => setShowUnreadOnly((v || "all") === "unread")}
+              className="w-full"
               variant="outline"
+            >
+              <ToggleGroupItem
+                value="all"
+                className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
+              >
+                Todas
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="unread"
+                className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
+              >
+                Não lidas
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 rounded-2xl interactive-tap" size="sm">
+                <Filter className="h-4 w-4" />
+                {typeLabels[typeFilter]}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuRadioGroup value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="expense">Despesas</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="invitation">Convites</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="reminder">Lembretes</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="task">Tarefas</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="validation">Validações</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="h-6 rounded-full px-2 text-[11px]">
+              Total: {isLoading ? "--" : totalNotifications}
+            </Badge>
+            <Badge variant="secondary" className="h-6 rounded-full px-2 text-[11px]">
+              Não lidas: {isLoading ? "--" : unreadCount}
+            </Badge>
+            <Badge variant="outline" className="h-6 rounded-full px-2 text-[11px]">
+              Mostrando: {isLoading ? "--" : filteredNotifications.length}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={refreshNotifications}
               disabled={isFetching}
-              className="gap-2 w-full sm:w-auto interactive-tap"
+              className="interactive-tap h-9 w-9 rounded-2xl"
+              aria-label="Atualizar"
+              title="Atualizar"
             >
               {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Atualizar
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
               onClick={handleMarkAllAsRead}
               disabled={unreadCount === 0 || markAllAsReadMutation.isPending}
-              className="gap-2 w-full sm:w-auto interactive-tap"
+              className="interactive-tap h-9 w-9 rounded-2xl"
+              aria-label="Marcar todas como lidas"
+              title="Marcar todas"
             >
               {markAllAsReadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-              Marcar todas
             </Button>
           </div>
         </div>
-      </PageContainer>
+
+        <Accordion
+          type="single"
+          collapsible
+          value={summaryOpen ? "summary" : undefined}
+          onValueChange={(v) => setSummaryOpen(v === "summary")}
+        >
+          <AccordionItem value="summary" className="border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Resumo</span>
+                <span className="text-xs text-muted-foreground">Status e sincronização (Firebase)</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3 text-xs text-muted-foreground">
+                Receba alertas em tempo real. Use os filtros acima para reduzir a lista e o botão de check para limpar as pendências.
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
 
       {isLoading ? (
-        <PageContainer className="space-y-3">
-          {[1, 2, 3].map((index) => (
-            <Card key={index} className="rounded-3xl border border-border/60 bg-card/70">
-              <CardHeader className="animate-pulse space-y-3">
-                <div className="h-4 w-1/3 rounded bg-muted" />
-                <div className="h-3 w-full rounded bg-muted" />
-                <div className="h-3 w-2/3 rounded bg-muted" />
-              </CardHeader>
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map((index) => (
+            <Card key={index} className="rounded-2xl border bg-card shadow-sm">
+              <CardContent className="p-3">
+                <div className="animate-pulse flex items-start gap-3">
+                  <div className="h-9 w-9 rounded-2xl bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-1/3 rounded bg-muted" />
+                    <div className="h-3 w-5/6 rounded bg-muted" />
+                  </div>
+                  <div className="h-9 w-9 rounded-2xl bg-muted" />
+                </div>
+              </CardContent>
             </Card>
           ))}
-        </PageContainer>
+        </div>
       ) : isEmptyState ? (
         <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
           <EmptyState
@@ -236,74 +299,101 @@ export default function Notifications() {
           />
         </PageContainer>
       ) : (
-        <PageContainer className="space-y-3">
-          {notifications?.map((notification: any) => {
+        <div className="space-y-2">
+          {filteredNotifications.map((notification: any) => {
             const VisualIcon = notificationVisuals[notification.type]?.icon ?? Bell;
-            const cardAccent = getCardAccent(notification.type);
+            const iconAccent = getIconAccent(notification.type);
+            const createdAtText = notification.createdAt
+              ? new Date(notification.createdAt).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "--";
+
             return (
               <motion.div
                 key={notification.id}
-                initial={{ opacity: 0, y: 24 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 170, damping: 20 }}
+                transition={{ duration: 0.18 }}
               >
                 <Card
-                  className={`rounded-3xl border shadow-sm transition-all interactive-card ${cardAccent} ${
-                    notification.read ? "opacity-80" : ""
+                  className={`interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+                    notification.read ? "opacity-75" : ""
                   }`}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex flex-1 items-start gap-3">
-                        <div className="mt-1 rounded-2xl bg-card/60 p-3 text-primary">
-                          <VisualIcon className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <CardTitle className="text-base">{notification.title}</CardTitle>
-                          <CardDescription className="text-sm">{notification.message}</CardDescription>
-                          <p className="text-xs text-muted-foreground">
-                            {notification.createdAt
-                              ? new Date(notification.createdAt).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "--"}
-                          </p>
-                        </div>
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl ${iconAccent}`}>
+                        <VisualIcon className="h-4 w-4" />
                       </div>
-                      <div className="flex gap-2">
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-sm font-semibold">{notification.title}</p>
+                          {!notification.read ? (
+                            <Badge className="h-5 rounded-full bg-primary/15 px-2 text-[11px] text-primary">Nova</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">{notification.message}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{createdAtText}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1">
                         <Button
-                          variant="secondary"
-                          size="sm"
-                          className="interactive-tap"
+                          variant="ghost"
+                          size="icon"
+                          className="interactive-tap h-9 w-9 rounded-2xl"
                           onClick={() => handleOpenNotification(notification)}
                           disabled={markAsReadMutation.isPending}
+                          aria-label="Abrir"
+                          title="Abrir"
                         >
-                          Abrir
+                          <ChevronRight className="h-4 w-4" />
                         </Button>
-                        {!notification.read && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="interactive-tap"
-                            onClick={() => handleMarkAsRead(notification.id)}
-                            disabled={markAsReadMutation.isPending}
-                            title="Marcar como lida"
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="interactive-tap h-9 w-9 rounded-2xl"
+                              aria-label="Mais opções"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => handleOpenNotification(notification)} disabled={markAsReadMutation.isPending}>
+                              Abrir
+                            </DropdownMenuItem>
+                            {!notification.read ? (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleMarkAsRead(notification.id)}
+                                  disabled={markAsReadMutation.isPending}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <Check className="h-4 w-4" />
+                                    Marcar como lida
+                                  </span>
+                                </DropdownMenuItem>
+                              </>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                  </CardHeader>
+                  </CardContent>
                 </Card>
               </motion.div>
             );
           })}
-        </PageContainer>
+        </div>
       )}
     </div>
   );
@@ -327,4 +417,20 @@ function getNotificationTarget(type: string): string | null {
 
 function getCardAccent(type: string) {
   return notificationVisuals[type]?.accent ?? "border-border/60 bg-card/80";
+}
+
+function getIconAccent(type: string) {
+  switch (type) {
+    case "expense":
+      return "bg-secondary/10 text-foreground";
+    case "invitation":
+      return "bg-info/10 text-foreground";
+    case "reminder":
+      return "bg-accent/10 text-foreground";
+    case "validation":
+    case "task":
+      return "bg-primary/10 text-primary";
+    default:
+      return "bg-muted text-foreground";
+  }
 }

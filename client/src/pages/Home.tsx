@@ -2,14 +2,19 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { APP_TITLE } from "@/const";
+import { useIsMobile } from "@/hooks/useMobile";
 import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import { CreditCard, TrendingUp, Users, Wallet } from "lucide-react";
+import { CreditCard, PieChart, Plus, Users, Wallet, Bell } from "lucide-react";
 import { Link } from "wouter";
+import { useState } from "react";
 
 export default function Home() {
   const { user, loading, isAuthenticated, loginWithGoogle } = useAuth();
+  const isMobile = useIsMobile();
+  const [homeView, setHomeView] = useState<"summary" | "actions">("summary");
 
   const { data: groups } = trpc.groups.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -83,7 +88,7 @@ export default function Home() {
                     <span className="text-sm font-medium">Pessoal</span>
                   </div>
                   <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-info/10">
-                    <TrendingUp className="h-8 w-8 text-info" />
+                    <PieChart className="h-8 w-8 text-info" />
                     <span className="text-sm font-medium">Relatórios</span>
                   </div>
                 </div>
@@ -139,116 +144,179 @@ export default function Home() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold sm:text-3xl">Olá, {firstName}!</h1>
-        <p className="text-sm text-muted-foreground sm:text-base">Bem-vindo de volta ao seu painel de controle</p>
-      </div>
-
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <Link href="/groups">
-          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-              <CardTitle className="text-sm font-medium">Meus Grupos</CardTitle>
-              <Users className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent className="px-4 pb-4 pt-0">
-              <div className="text-2xl font-bold">{groupsList.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {groupsList.length === 1 ? "grupo ativo" : "grupos ativos"}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/shared-expenses">
-          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-              <CardTitle className="text-sm font-medium">Despesas Compartilhadas</CardTitle>
-              <CreditCard className="h-5 w-5 text-secondary" />
-            </CardHeader>
-            <CardContent className="space-y-1 px-4 pb-4 pt-0">
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold">{sharedCountData?.count ?? 0}</div>
-                <span className="text-xs text-muted-foreground">itens</span>
-              </div>
-              <div className="text-sm font-medium">{formatCents(sharedCountData?.totalAmount ?? 0)}</div>
-              <p className="text-xs text-muted-foreground">Ver todas as despesas</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/personal-expenses">
-          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-              <CardTitle className="text-sm font-medium">Despesas Pessoais</CardTitle>
-              <Wallet className="h-5 w-5 text-accent" />
-            </CardHeader>
-            <CardContent className="space-y-1 px-4 pb-4 pt-0">
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold">{personalExpenses?.length ?? 0}</div>
-                <span className="text-xs text-muted-foreground">itens</span>
-              </div>
-              <div className="text-sm font-medium">{formatCents(personalTotal)}</div>
-              <p className="text-xs text-muted-foreground">Ver minhas despesas</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/notifications">
-          <Card className="interactive-card cursor-pointer rounded-2xl border border-border/70 transition-all hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-              <CardTitle className="text-sm font-medium">Notificações</CardTitle>
-              <div className="h-5 w-5 rounded-full bg-info flex items-center justify-center text-xs text-white font-bold">
-                {unreadCount || 0}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-1 px-4 pb-4 pt-0">
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold">{notificationsCount}</div>
-                <span className="text-xs text-muted-foreground">total</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {unreadCount || 0} {unreadCount === 1 ? "não lida" : "não lidas"}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Ações rápidas */}
-      <Card className="rounded-2xl border border-border/70">
-        <CardHeader className="p-4 pb-3">
-          <CardTitle>Ações Rápidas</CardTitle>
-          <CardDescription>Acesse rapidamente as funcionalidades principais</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0 sm:gap-3">
-          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
-            <Link href="/groups">
-              <Users className="h-4 w-4" />
-              Criar Grupo
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
-            <Link href="/shared-expenses">
-              <CreditCard className="h-4 w-4" />
-              Nova Despesa
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
-            <Link href="/tasks">
-              <TrendingUp className="h-4 w-4" />
-              Adicionar Tarefa
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full justify-start gap-2 rounded-2xl py-3">
-            <Link href="/reports">
-              <TrendingUp className="h-4 w-4" />
-              Ver Relatórios
-            </Link>
-          </Button>
+      <Card className="rounded-2xl border bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
+        <CardContent className="flex items-center justify-between gap-3 p-3">
+          <div className="space-y-1">
+            <p className="text-sm/5 opacity-95">Olá, {firstName}!</p>
+            <p className="text-sm font-semibold">Acompanhe tudo em tempo real.</p>
+          </div>
+          <div className="rounded-2xl bg-white/15 p-2">
+            <CreditCard className="h-5 w-5" />
+          </div>
         </CardContent>
       </Card>
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup
+          type="single"
+          value={homeView}
+          onValueChange={(v) => setHomeView((v || "summary") as any)}
+          className="w-full"
+          variant="outline"
+        >
+          <ToggleGroupItem value="summary" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Resumo
+          </ToggleGroupItem>
+          <ToggleGroupItem value="actions" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Atalhos
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {homeView === "summary" ? (
+        <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "summary"}>
+          <AccordionItem value="summary" className="border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Resumo</span>
+                <span className="text-xs text-muted-foreground">Toque para expandir</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="space-y-2">
+                <Link href="/groups">
+                  <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <Users className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">Grupos</p>
+                            <p className="text-[12px] text-muted-foreground truncate">
+                              {groupsList.length === 1 ? "1 grupo ativo" : `${groupsList.length} grupos ativos`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{groupsList.length}</p>
+                          <p className="text-[11px] text-muted-foreground">ativos</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+
+                <Link href="/shared-expenses">
+                  <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
+                            <CreditCard className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">Compart.</p>
+                            <p className="text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{sharedCountData?.count ?? 0}</p>
+                          <p className="text-[11px] text-muted-foreground">despesas</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+
+                <Link href="/personal-expenses">
+                  <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <Wallet className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">Pessoal</p>
+                            <p className="text-[12px] text-muted-foreground truncate">{formatCents(personalTotal)} total</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{personalExpenses?.length ?? 0}</p>
+                          <p className="text-[11px] text-muted-foreground">itens</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+
+                <Link href="/notifications">
+                  <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-info/15 text-info">
+                            <Bell className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">Notificações</p>
+                            <p className="text-[12px] text-muted-foreground truncate">Total: {notificationsCount}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{unreadCount || 0}</p>
+                          <p className="text-[11px] text-muted-foreground">não lidas</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      ) : (
+        <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "actions"}>
+          <AccordionItem value="actions" className="border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Ações rápidas</span>
+                <span className="text-xs text-muted-foreground">Atalhos para o essencial</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
+                  <Link href="/groups">
+                    <Plus className="h-4 w-4" />
+                    Criar grupo
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
+                  <Link href="/shared-expenses">
+                    <CreditCard className="h-4 w-4" />
+                    Nova despesa
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
+                  <Link href="/tasks">
+                    <Plus className="h-4 w-4" />
+                    Nova tarefa
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
+                  <Link href="/reports">
+                    <PieChart className="h-4 w-4" />
+                    Relatórios
+                  </Link>
+                </Button>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
     </div>
   );
 }

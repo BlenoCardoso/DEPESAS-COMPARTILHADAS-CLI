@@ -28,6 +28,11 @@ const sanitizeBaseUrl = (url?: string | null) =>
   typeof url === "string" && url.length > 0 ? url.replace(/\/+$/, "") : "";
 
 const isNativeRuntime = Capacitor?.isNativePlatform?.() ?? false;
+
+if (isNativeRuntime && typeof document !== "undefined") {
+  document.documentElement.classList.add("native");
+}
+
 const apiBaseUrl = (() => {
   const fromEnv = sanitizeBaseUrl(import.meta.env.VITE_API_URL ?? null);
   if (fromEnv) {

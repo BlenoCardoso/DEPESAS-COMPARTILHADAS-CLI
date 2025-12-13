@@ -294,11 +294,34 @@ export async function createPersonalExpense(data: any) {
 export async function getUserPersonalExpenses(userId: string, startDate?: Date, endDate?: Date) {
   const db = adminDb();
   let q: FirebaseFirestore.Query = db.collection("personalExpenses").where("userId", "==", userId);
+
+  const filterInMemory = (items: any[]) => {
+    if (!startDate && !endDate) return items;
+    return items.filter((e) => {
+      const d = e?.date instanceof Date ? e.date : e?.date ? new Date(e.date) : null;
+      if (!d || Number.isNaN(d.getTime())) return false;
+      if (startDate && d < startDate) return false;
+      if (endDate && d > endDate) return false;
+      return true;
+    });
+  };
+
   if (startDate && endDate) {
-    q = q.where("date", ">=", Timestamp.fromDate(startDate)).where("date", "<=", Timestamp.fromDate(endDate));
+    try {
+      const ranged = await q
+        .where("date", ">=", Timestamp.fromDate(startDate))
+        .where("date", "<=", Timestamp.fromDate(endDate))
+        .get();
+      return ranged.docs.map((d) => ({ id: d.id, ...normalize(d.data()) }));
+    } catch {
+      const snap = await q.get();
+      const all = snap.docs.map((d) => ({ id: d.id, ...normalize(d.data()) }));
+      return filterInMemory(all);
+    }
   }
+
   const snap = await q.get();
-  return snap.docs.map(d => ({ id: d.id, ...normalize(d.data()) }));
+  return snap.docs.map((d) => ({ id: d.id, ...normalize(d.data()) }));
 }
 
 export async function updatePersonalExpense(id: string, data: any) {

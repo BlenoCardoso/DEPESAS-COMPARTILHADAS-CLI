@@ -1,17 +1,19 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { trpc } from "@/lib/trpc";
-import { Loader2, MailCheck, MailX, Trash2 } from "lucide-react";
+import { Check, Loader2, MailCheck, MailX, MoreVertical, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function Invitations() {
   const { user } = useAuth();
-  const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all");
 
   const { data: invitations, isLoading, refetch } = trpc.invitations.list.useQuery(undefined, { enabled: !!user });
   const utils = trpc.useUtils();
@@ -47,52 +49,167 @@ export default function Invitations() {
     respondMutation.mutate({ id, accept });
   };
 
-  const filtered = (invitations || []).filter(i => {
-    if (!filter) return true;
-    return i.invitedEmail.toLowerCase().includes(filter.toLowerCase()) || i.groupId.toLowerCase().includes(filter.toLowerCase());
+  const filtered = (invitations || []).filter((inv: any) => {
+    if (statusFilter === "all") return true;
+    return inv.status === statusFilter;
   });
 
+  const statusMeta: Record<string, { label: string; badgeClass: string }> = {
+    pending: { label: "Pendente", badgeClass: "bg-secondary/20 text-foreground" },
+    accepted: { label: "Aceito", badgeClass: "bg-primary/15 text-primary" },
+    rejected: { label: "Recusado", badgeClass: "bg-destructive/15 text-destructive" },
+  };
+
+  const formatDate = (value: any) => {
+    if (!value) return "—";
+    const d = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Convites</h1>
-          <p className="text-muted-foreground">Gerencie convites enviados e recebidos</p>
-        </div>
-        <div className="flex gap-2"><Input placeholder="Filtrar" value={filter} onChange={e => setFilter(e.target.value)} className="w-[160px]" /></div>
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Convites</h1>
+        <p className="text-sm text-muted-foreground">Veja convites enviados e recebidos para seus grupos.</p>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup
+          type="single"
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter((v || "all") as any)}
+          className="w-full"
+          variant="outline"
+        >
+          <ToggleGroupItem value="all" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Todos
+          </ToggleGroupItem>
+          <ToggleGroupItem value="pending" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Pend.
+          </ToggleGroupItem>
+          <ToggleGroupItem value="accepted" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Aceitos
+          </ToggleGroupItem>
+          <ToggleGroupItem value="rejected" className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            Recus.
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
       ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhum convite</p></CardContent></Card>
+        <Card className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="py-10 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">Nenhum convite</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
           {filtered.map(inv => {
             const isPending = inv.status === 'pending';
             const canRespond = (inv as any).canRespond ?? (isPending && (inv.invitedEmail || '').toLowerCase() === (user?.email || '').toLowerCase());
             const canCancel = (inv as any).canCancel ?? (isPending && inv.invitedBy === user?.id);
+            const meta = statusMeta[inv.status] ?? { label: String(inv.status), badgeClass: "bg-muted text-foreground" };
+            const updated = formatDate((inv as any).updatedAt || (inv as any).createdAt);
+
             return (
-              <Card key={inv.id} className="relative">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex justify-between"><span>{inv.invitedEmail}</span><span className="capitalize text-sm">{inv.status}</span></CardTitle>
-                  <CardDescription>Grupo: {inv.groupId}</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm space-y-2">
-                  {isPending && (canRespond || canCancel) ? (
-                    <div className="flex flex-wrap gap-2">
-                      {canRespond && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => handleRespond(inv.id, false)} disabled={respondMutation.isPending}><MailX className="h-4 w-4 mr-1" />Recusar</Button>
-                          <Button size="sm" onClick={() => handleRespond(inv.id, true)} disabled={respondMutation.isPending}><MailCheck className="h-4 w-4 mr-1" />Aceitar</Button>
-                        </>
-                      )}
-                      {canCancel && (
-                        <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate({ id: inv.id })} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4 mr-1" />Cancelar</Button>
-                      )}
+              <Card
+                key={inv.id}
+                className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-sm font-semibold">{inv.invitedEmail}</p>
+                        <Badge className={"h-5 rounded-full px-2 text-[11px] " + meta.badgeClass}>{meta.label}</Badge>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground truncate">Grupo: {inv.groupId}</span>
+                        <span className="text-[11px] text-muted-foreground">•</span>
+                        <span className="text-[11px] text-muted-foreground">{updated}</span>
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">{isPending ? 'Aguardando resposta' : 'Concluído'}</p>
-                  )}
+
+                    <div className="flex items-center gap-1">
+                      {isPending && canRespond ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="interactive-tap h-9 w-9 rounded-2xl"
+                            onClick={() => handleRespond(inv.id, false)}
+                            disabled={respondMutation.isPending}
+                            aria-label="Recusar"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="interactive-tap h-9 w-9 rounded-2xl"
+                            onClick={() => handleRespond(inv.id, true)}
+                            disabled={respondMutation.isPending}
+                            aria-label="Aceitar"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : null}
+
+                      {(canCancel || (isPending && canRespond)) ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="interactive-tap h-9 w-9 rounded-2xl"
+                              aria-label="Mais opções"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            {isPending && canRespond ? (
+                              <>
+                                <DropdownMenuItem onClick={() => handleRespond(inv.id, true)} disabled={respondMutation.isPending}>
+                                  <span className="flex items-center gap-2">
+                                    <MailCheck className="h-4 w-4" />
+                                    Aceitar
+                                  </span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleRespond(inv.id, false)} disabled={respondMutation.isPending}>
+                                  <span className="flex items-center gap-2">
+                                    <MailX className="h-4 w-4" />
+                                    Recusar
+                                  </span>
+                                </DropdownMenuItem>
+                              </>
+                            ) : null}
+                            {canCancel ? (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => deleteMutation.mutate({ id: inv.id })}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Trash2 className="h-4 w-4" />
+                                  Cancelar
+                                </span>
+                              </DropdownMenuItem>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {!isPending ? (
+                    <p className="mt-2 text-[11px] text-muted-foreground">Concluído</p>
+                  ) : !canRespond && !canCancel ? (
+                    <p className="mt-2 text-[11px] text-muted-foreground">Aguardando resposta</p>
+                  ) : null}
                 </CardContent>
               </Card>
             );

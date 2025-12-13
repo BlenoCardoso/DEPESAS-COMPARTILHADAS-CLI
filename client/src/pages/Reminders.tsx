@@ -1,13 +1,16 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export default function Reminders() {
@@ -16,8 +19,65 @@ export default function Reminders() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [reminderDate, setReminderDate] = useState<string>(() => new Date().toISOString().substring(0, 16));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [whenFilter, setWhenFilter] = useState<"all" | "today" | "upcoming" | "past">("upcoming");
+  const [filterText, setFilterText] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
 
   const { data: reminders, isLoading, refetch } = trpc.reminders.list.useQuery(undefined, { enabled: isAuthenticated });
+
+  const remindersList = Array.isArray(reminders) ? (reminders as any[]) : [];
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let today = 0;
+    let upcoming = 0;
+    for (const r of remindersList) {
+      const d = r?.reminderDate ? new Date(r.reminderDate) : null;
+      if (!d || Number.isNaN(d.getTime())) continue;
+      if (d >= startOfDay && d <= endOfDay) today++;
+      if (d >= now) upcoming++;
+    }
+
+    return {
+      total: remindersList.length,
+      today,
+      upcoming,
+    };
+  }, [remindersList]);
+
+  const visibleReminders = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let list = remindersList;
+    if (whenFilter !== "all") {
+      list = list.filter((r) => {
+        const d = r?.reminderDate ? new Date(r.reminderDate) : null;
+        if (!d || Number.isNaN(d.getTime())) return false;
+        if (whenFilter === "today") return d >= startOfDay && d <= endOfDay;
+        if (whenFilter === "upcoming") return d >= now;
+        return d < now;
+      });
+    }
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      list = list.filter((r) => String(r?.title || "").toLowerCase().includes(q));
+    }
+    if (filterCategory) {
+      const q = filterCategory.toLowerCase();
+      list = list.filter((r) => String(r?.category || "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [remindersList, whenFilter, filterText, filterCategory]);
 
   const createMutation = trpc.reminders.create.useMutation({
     onSuccess: () => { toast.success("Lembrete criado"); setIsCreateOpen(false); setTitle(""); setCategory(""); refetch(); },
@@ -33,72 +93,216 @@ export default function Reminders() {
   const handleDelete = (id: string) => { if (confirm("Remover lembrete?")) deleteMutation.mutate({ id }); };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
-          <p className="text-sm text-muted-foreground">Gerencie seus lembretes</p>
-        </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 w-full sm:w-auto"><Plus className="h-4 w-4" /> Novo</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Novo Lembrete</DialogTitle>
-              <DialogDescription>Notificação simples para uma data</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Data/Hora</Label><Input type="datetime-local" value={reminderDate} onChange={e => setReminderDate(e.target.value)} /></div>
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
+        <p className="text-sm text-muted-foreground">Notificações rápidas por data/hora.</p>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup
+          type="single"
+          value={whenFilter}
+          onValueChange={(v) => setWhenFilter((v as any) || "upcoming")}
+          className="w-full"
+          variant="outline"
+        >
+          <ToggleGroupItem value="upcoming" className="flex-1 rounded-xl">
+            Próximos
+          </ToggleGroupItem>
+          <ToggleGroupItem value="today" className="flex-1 rounded-xl">
+            Hoje
+          </ToggleGroupItem>
+          <ToggleGroupItem value="past" className="flex-1 rounded-xl">
+            Passados
+          </ToggleGroupItem>
+          <ToggleGroupItem value="all" className="flex-1 rounded-xl">
+            Todos
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      <Accordion type="single" collapsible defaultValue={undefined}>
+        <AccordionItem value="stats" className="border-none">
+          <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold">Resumo</span>
+              <span className="text-xs text-muted-foreground">
+                Total {stats.total} • Hoje {stats.today} • Próximos {stats.upcoming}
+              </span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pt-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{stats.total}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Hoje</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{stats.today}</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-2xl border bg-card shadow-sm">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Próximos</p>
+                  <p className="mt-1 text-2xl font-bold leading-none">{stats.upcoming}</p>
+                </CardContent>
+              </Card>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <div className="rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Ações</p>
+            <p className="text-xs text-muted-foreground">Crie e filtre sem poluir a lista.</p>
+          </div>
+
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="interactive-tap gap-2 w-full rounded-2xl sm:w-auto"><Plus className="h-4 w-4" /> Novo</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Novo Lembrete</DialogTitle>
+                <DialogDescription>Notificação simples para uma data</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Data/Hora</Label><Input type="datetime-local" value={reminderDate} onChange={e => setReminderDate(e.target.value)} /></div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+                <Button onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <Accordion
+          type="single"
+          collapsible
+          value={filtersOpen ? "filters" : undefined}
+          onValueChange={(v) => setFiltersOpen(v === "filters")}
+        >
+          <AccordionItem value="filters" className="mt-2 border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-background/60 px-4 py-3 hover:no-underline">
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold">Filtros</span>
+                <span className="text-xs text-muted-foreground">Busca e categoria</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pt-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Busca</Label>
+                  <Input value={filterText} onChange={(e) => setFilterText(e.target.value)} placeholder="Título" className="w-full rounded-2xl" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Categoria</Label>
+                  <Input value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full rounded-2xl" />
+                </div>
+                {(filterText || filterCategory || whenFilter !== "upcoming") && (
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="interactive-tap w-full rounded-2xl"
+                      onClick={() => {
+                        setFilterText("");
+                        setFilterCategory("");
+                        setWhenFilter("upcoming");
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
-      ) : !reminders || reminders.length === 0 ? (
-        <Card className="rounded-2xl border border-border/70"><CardContent className="py-10 text-center space-y-2"><p className="text-muted-foreground">Nenhum lembrete</p><Button onClick={() => setIsCreateOpen(true)}>Criar primeiro</Button></CardContent></Card>
+      ) : remindersList.length === 0 ? (
+        <Card className="rounded-2xl border border-border/70">
+          <CardContent className="py-10 text-center space-y-2">
+            <p className="text-muted-foreground">Nenhum lembrete</p>
+            <Button onClick={() => setIsCreateOpen(true)} className="rounded-2xl">Criar primeiro</Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
-            {(reminders as any[]).map(r => (
-            <Card key={r.id} className="rounded-2xl border border-border/70">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex justify-between text-lg">
-                  <span>{r.title}</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Mais opções">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => handleDelete(r.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Trash2 className="h-4 w-4" />
-                          Remover
-                        </span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardTitle>
-                <CardDescription>{r.category || 'Sem categoria'}</CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <div className="flex justify-between"><span>Data</span><span>{new Date(r.reminderDate).toLocaleString('pt-BR')}</span></div>
+        <PageContainer className="space-y-2">
+          {visibleReminders.length === 0 ? (
+            <Card className="rounded-2xl border border-border/70">
+              <CardContent className="py-10 text-center space-y-2">
+                <p className="text-muted-foreground">Nenhum lembrete com esses filtros</p>
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => {
+                    setFilterText("");
+                    setFilterCategory("");
+                    setWhenFilter("upcoming");
+                  }}
+                >
+                  Limpar filtros
+                </Button>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          ) : (
+            visibleReminders.map((r) => (
+              <Card
+                key={r.id}
+                className="interactive-card rounded-2xl border border-border/70 bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{r.title}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                          {r?.reminderDate ? new Date(r.reminderDate).toLocaleString("pt-BR") : "—"}
+                        </span>
+                        {r?.category ? (
+                          <span className="text-[11px] text-muted-foreground">{r.category}</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="interactive-tap h-9 w-9 rounded-2xl" aria-label="Mais opções">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDelete(r.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Remover
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </PageContainer>
       )}
     </div>
   );
