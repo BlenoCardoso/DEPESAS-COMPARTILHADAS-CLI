@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -10,19 +10,49 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { CurrentGroupProvider } from "./contexts/CurrentGroupContext";
 import { Loader2 } from "lucide-react";
 
-const Home = lazy(() => import("./pages/Home"));
-const FirebaseLogin = lazy(() => import("./pages/FirebaseLogin"));
-const Groups = lazy(() => import("./pages/Groups"));
-const GroupDetails = lazy(() => import("./pages/GroupDetails"));
-const SharedExpenses = lazy(() => import("./pages/SharedExpenses"));
-const PersonalExpenses = lazy(() => import("./pages/PersonalExpenses"));
-const Tasks = lazy(() => import("./pages/Tasks"));
-const Reminders = lazy(() => import("./pages/Reminders"));
-const Calendar = lazy(() => import("./pages/Calendar"));
-const Reports = lazy(() => import("./pages/Reports"));
-const Invitations = lazy(() => import("./pages/Invitations"));
-const Notifications = lazy(() => import("./pages/Notifications"));
-const Settings = lazy(() => import("./pages/Settings"));
+const routeLoaders = {
+  Home: () => import("./pages/Home"),
+  FirebaseLogin: () => import("./pages/FirebaseLogin"),
+  Groups: () => import("./pages/Groups"),
+  GroupDetails: () => import("./pages/GroupDetails"),
+  SharedExpenses: () => import("./pages/SharedExpenses"),
+  PersonalExpenses: () => import("./pages/PersonalExpenses"),
+  Tasks: () => import("./pages/Tasks"),
+  Reminders: () => import("./pages/Reminders"),
+  Calendar: () => import("./pages/Calendar"),
+  Reports: () => import("./pages/Reports"),
+  Invitations: () => import("./pages/Invitations"),
+  Notifications: () => import("./pages/Notifications"),
+  Settings: () => import("./pages/Settings"),
+} as const;
+
+const Home = lazy(routeLoaders.Home);
+const FirebaseLogin = lazy(routeLoaders.FirebaseLogin);
+const Groups = lazy(routeLoaders.Groups);
+const GroupDetails = lazy(routeLoaders.GroupDetails);
+const SharedExpenses = lazy(routeLoaders.SharedExpenses);
+const PersonalExpenses = lazy(routeLoaders.PersonalExpenses);
+const Tasks = lazy(routeLoaders.Tasks);
+const Reminders = lazy(routeLoaders.Reminders);
+const Calendar = lazy(routeLoaders.Calendar);
+const Reports = lazy(routeLoaders.Reports);
+const Invitations = lazy(routeLoaders.Invitations);
+const Notifications = lazy(routeLoaders.Notifications);
+const Settings = lazy(routeLoaders.Settings);
+
+const scheduleIdle = (callback: () => void) => {
+  if (typeof window === "undefined") return;
+
+  const requestIdleCallback = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void })
+    .requestIdleCallback;
+
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(callback, { timeout: 1500 });
+    return;
+  }
+
+  window.setTimeout(callback, 350);
+};
 
 function RouteFallback() {
   return (
@@ -61,10 +91,37 @@ function Router() {
 function App() {
   const [isBooting, setIsBooting] = useState(true);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsBooting(false), 1200);
-    return () => clearTimeout(timer);
+  const prefetchRouteChunks = useMemo(() => {
+    // Evita puxar de cara as rotas mais pesadas (ex: relatórios/calendário),
+    // mas deixa as transições comuns bem rápidas.
+    return () => {
+      const safePrefetch = (loader: () => Promise<unknown>) => {
+        void loader().catch(() => undefined);
+      };
+
+      safePrefetch(routeLoaders.Groups);
+      safePrefetch(routeLoaders.GroupDetails);
+      safePrefetch(routeLoaders.SharedExpenses);
+      safePrefetch(routeLoaders.PersonalExpenses);
+      safePrefetch(routeLoaders.Tasks);
+      safePrefetch(routeLoaders.Reminders);
+      safePrefetch(routeLoaders.Invitations);
+      safePrefetch(routeLoaders.Notifications);
+      safePrefetch(routeLoaders.Settings);
+    };
   }, []);
+
+  useEffect(() => {
+    // Remove o delay artificial fixo; deixa o primeiro render acontecer o quanto antes.
+    // Mantém a splash por apenas 1 frame para evitar "flash" em alguns devices.
+    const raf = window.requestAnimationFrame(() => setIsBooting(false));
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    if (isBooting) return;
+    scheduleIdle(prefetchRouteChunks);
+  }, [isBooting, prefetchRouteChunks]);
 
   return (
     <ErrorBoundary>
