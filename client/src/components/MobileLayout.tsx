@@ -251,7 +251,10 @@ function NavigationDrawer({
   const primaryMore = PRIMARY_NAV.slice(4);
 
   return (
-    <SheetContent side="left" className="flex w-[280px] flex-col p-0">
+    <SheetContent
+      side="left"
+      className="flex w-[280px] flex-col p-0 pt-[var(--safe-area-top)] pb-[var(--safe-area-bottom)]"
+    >
       <SheetHeader className="border-b border-border/70 px-4 py-4 text-left">
         <SheetTitle className="text-xs text-muted-foreground">{APP_TITLE}</SheetTitle>
         <p className="text-lg font-semibold text-foreground leading-tight">{userName || "Olá"}</p>
