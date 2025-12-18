@@ -1,5 +1,6 @@
 import { getLoginUrl, isUsingFirebase } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { queryClient } from "@/lib/queryClient";
 import { TRPCClientError } from "@trpc/client";
 import { Capacitor } from "@capacitor/core";
 import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
@@ -261,7 +262,10 @@ export function useAuth(options?: UseAuthOptions) {
       } finally {
         setFirebaseLoading(false);
         setSessionSynced(false);
+        setFirebaseUser(null);
         utils.auth.me.setData(undefined, null);
+        // Remove qualquer dado cacheado (evita mostrar dados antigos após sair)
+        queryClient.clear();
       }
     } else {
       // tRPC logout
@@ -278,6 +282,7 @@ export function useAuth(options?: UseAuthOptions) {
       } finally {
         utils.auth.me.setData(undefined, null);
         await utils.auth.me.invalidate();
+        queryClient.clear();
       }
     }
   }, [logoutMutation, utils]);
@@ -286,30 +291,36 @@ export function useAuth(options?: UseAuthOptions) {
   const state = useMemo(() => {
     if (usingFirebase) {
       // Firebase auth state
+      // IMPORTANTE: quando firebaseUser for null, trate como deslogado mesmo que
+      // exista cache antigo de /auth.me no React Query.
+      if (!firebaseUser) {
+        localStorage.removeItem("manus-runtime-user-info");
+        return {
+          user: null,
+          loading: firebaseLoading,
+          error: firebaseError ?? null,
+          isAuthenticated: false,
+        };
+      }
+
       const backendUser = meQuery.data ?? null;
-      const fallbackUser = firebaseUser ? {
+      const fallbackUser = {
         id: firebaseUser.uid,
         openId: firebaseUser.uid,
         name: firebaseUser.displayName,
         email: firebaseUser.email,
         avatarUrl: firebaseUser.photoURL,
         role: 'user' as const,
-      } : null;
+      };
       const user = backendUser ?? fallbackUser;
 
-      if (user) {
-        localStorage.setItem("manus-runtime-user-info", JSON.stringify(user));
-      } else {
-        localStorage.removeItem("manus-runtime-user-info");
-      }
+      localStorage.setItem("manus-runtime-user-info", JSON.stringify(user));
 
       return {
         user,
-        // Não bloqueia a UI esperando o cookie de sessão.
-        // As rotas protegidas já funcionam via Bearer token no tRPC.
         loading: firebaseLoading,
         error: firebaseError ?? meQuery.error ?? null,
-        isAuthenticated: Boolean(firebaseUser),
+        isAuthenticated: true,
       };
     } else {
       // tRPC auth state

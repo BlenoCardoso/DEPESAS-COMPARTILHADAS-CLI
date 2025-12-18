@@ -3,12 +3,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MobileLayout from "./components/MobileLayout";
 import SplashScreen from "./components/SplashScreen";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CurrentGroupProvider } from "./contexts/CurrentGroupContext";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { initPushNotifications, setupPushNotificationListeners } from "./lib/pushNotifications";
+import { Capacitor } from "@capacitor/core";
 
 const routeLoaders = {
   Home: () => import("./pages/Home"),
@@ -24,6 +28,10 @@ const routeLoaders = {
   Invitations: () => import("./pages/Invitations"),
   Notifications: () => import("./pages/Notifications"),
   Settings: () => import("./pages/Settings"),
+  FinancialProfile: () => import("./pages/FinancialProfile"),
+  GroupBalances: () => import("./pages/GroupBalances"),
+  ExpenseTemplates: () => import("./pages/ExpenseTemplates"),
+  ExpenseCategories: () => import("./pages/ExpenseCategories"),
 } as const;
 
 const Home = lazy(routeLoaders.Home);
@@ -39,6 +47,10 @@ const Reports = lazy(routeLoaders.Reports);
 const Invitations = lazy(routeLoaders.Invitations);
 const Notifications = lazy(routeLoaders.Notifications);
 const Settings = lazy(routeLoaders.Settings);
+const FinancialProfile = lazy(routeLoaders.FinancialProfile);
+const GroupBalances = lazy(routeLoaders.GroupBalances);
+const ExpenseTemplates = lazy(routeLoaders.ExpenseTemplates);
+const ExpenseCategories = lazy(routeLoaders.ExpenseCategories);
 
 const scheduleIdle = (callback: () => void) => {
   if (typeof window === "undefined") return;
@@ -63,6 +75,19 @@ function RouteFallback() {
 }
 
 function Router() {
+  const { isAuthenticated, loading } = useAuth();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (loading) return;
+    if (isAuthenticated) return;
+
+    const isPublicRoute = location === "/" || location === "/firebase-login" || location === "/404";
+    if (!isPublicRoute) {
+      setLocation("/");
+    }
+  }, [isAuthenticated, loading, location, setLocation]);
+
   return (
     <MobileLayout>
       <Suspense fallback={<RouteFallback />}>
@@ -80,6 +105,10 @@ function Router() {
           <Route path="/invitations" component={Invitations} />
           <Route path="/notifications" component={Notifications} />
           <Route path="/settings" component={Settings} />
+          <Route path="/financial-profile" component={FinancialProfile} />
+          <Route path="/group-balances" component={GroupBalances} />
+          <Route path="/expense-templates" component={ExpenseTemplates} />
+          <Route path="/expense-categories" component={ExpenseCategories} />
           <Route path="/404" component={NotFound} />
           <Route component={NotFound} />
         </Switch>
@@ -116,6 +145,21 @@ function App() {
     // Mantém a splash por apenas 1 frame para evitar "flash" em alguns devices.
     const raf = window.requestAnimationFrame(() => setIsBooting(false));
     return () => window.cancelAnimationFrame(raf);
+  }, []);
+
+  // Inicializar notificações push quando o app carregar
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      initPushNotifications().then((token) => {
+        if (token) {
+          console.log('FCM Token:', token);
+          // Aqui você pode salvar o token no backend para enviar notificações
+          // TODO: trpc.notifications.saveFcmToken.mutate({ token });
+        }
+      });
+      
+      setupPushNotificationListeners();
+    }
   }, []);
 
   useEffect(() => {

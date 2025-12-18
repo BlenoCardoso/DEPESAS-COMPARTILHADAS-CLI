@@ -47,6 +47,17 @@ export interface GroupMember {
   userId: string;
   role: "owner" | "admin" | "member";
   joinedAt: Timestamp;
+  // Perfil financeiro
+  monthlyIncome?: number; // em centavos
+  incomeVisible?: boolean; // se o valor deve ser visível ou só usado no cálculo
+  customWeight?: number; // multiplicador customizado (ex: 1.2 = paga 20% a mais)
+}
+
+export type SplitMode = "equal" | "fixed" | "percentage" | "proportional" | "single";
+
+export interface CustomSplit {
+  userId: string;
+  value: number; // valor fixo (centavos), porcentagem (0-100) ou peso proporcional
 }
 
 export interface SharedExpense {
@@ -57,13 +68,25 @@ export interface SharedExpense {
   amount: number; // em centavos
   currency: string;
   category?: string;
-  paidBy: string; // userId
+  paidBy: string; // userId (quem realmente desembolsou)
   date: Timestamp;
   status: "pending" | "validated" | "rejected";
   validatedBy?: string;
   validatedAt?: Timestamp;
   createdBy: string;
   allowMemberEdits?: boolean;
+  // Novos campos para divisão flexível
+  splitMode: SplitMode; // equal, fixed, percentage, proportional
+  customSplits?: CustomSplit[]; // usado quando splitMode !== 'equal'
+  // Recorrência/Parcelas
+  isRecurring?: boolean;
+  recurringFrequency?: "weekly" | "monthly" | "yearly";
+  nextDueDate?: Timestamp;
+  isPaused?: boolean;
+  isInstallment?: boolean;
+  installmentNumber?: number; // ex: 3 de 12
+  totalInstallments?: number;
+  parentExpenseId?: string; // referência à despesa original (para parcelas)
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -148,6 +171,44 @@ export interface Notification {
   relatedId?: string;
   read: boolean;
   createdAt: Timestamp;
+}
+
+// Settlement (acerto de contas)
+export interface Settlement {
+  id?: string;
+  groupId: string;
+  fromUserId: string; // quem pagou
+  toUserId: string; // quem recebeu
+  amount: number; // em centavos
+  description?: string;
+  settledAt: Timestamp;
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Template de despesa recorrente
+export interface ExpenseTemplate {
+  id?: string;
+  groupId: string;
+  title: string;
+  description?: string;
+  amount: number;
+  currency: string;
+  category?: string;
+  paidBy: string;
+  splitMode: SplitMode;
+  customSplits?: CustomSplit[];
+  frequency: "weekly" | "monthly" | "yearly";
+  dayOfWeek?: number; // 0-6 para weekly
+  dayOfMonth?: number; // 1-31 para monthly
+  monthOfYear?: number; // 1-12 para yearly
+  isActive: boolean;
+  lastGenerated?: Timestamp;
+  nextDueDate: Timestamp;
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 // ============ HELPER FUNCTIONS ============
@@ -757,6 +818,80 @@ export async function markSplitAsPaid(id: string): Promise<void> {
     });
   } catch (error) {
     console.error('[Firestore] Failed to mark split as paid:', error);
+    throw error;
+  }
+}
+
+// ============ SETTLEMENT FUNCTIONS ============
+
+export async function createSettlement(settlementData: Omit<Settlement, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'settlements'), addTimestamps(settlementData));
+    return docRef.id;
+  } catch (error) {
+    console.error('[Firestore] Failed to create settlement:', error);
+    throw error;
+  }
+}
+
+export async function getGroupSettlements(groupId: string): Promise<Settlement[]> {
+  try {
+    const q = query(
+      collection(db, 'settlements'),
+      where('groupId', '==', groupId),
+      orderBy('settledAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Settlement[];
+  } catch (error) {
+    console.error('[Firestore] Failed to get group settlements:', error);
+    return [];
+  }
+}
+
+// ============ EXPENSE TEMPLATE FUNCTIONS ============
+
+export async function createExpenseTemplate(templateData: Omit<ExpenseTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'expenseTemplates'), addTimestamps(templateData));
+    return docRef.id;
+  } catch (error) {
+    console.error('[Firestore] Failed to create expense template:', error);
+    throw error;
+  }
+}
+
+export async function getGroupExpenseTemplates(groupId: string): Promise<ExpenseTemplate[]> {
+  try {
+    const q = query(
+      collection(db, 'expenseTemplates'),
+      where('groupId', '==', groupId),
+      where('isActive', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ExpenseTemplate[];
+  } catch (error) {
+    console.error('[Firestore] Failed to get group expense templates:', error);
+    return [];
+  }
+}
+
+export async function updateExpenseTemplate(id: string, data: Partial<Omit<ExpenseTemplate, 'id' | 'createdAt'>>): Promise<void> {
+  try {
+    const docRef = doc(db, 'expenseTemplates', id);
+    await updateDoc(docRef, addTimestamps(data, true));
+  } catch (error) {
+    console.error('[Firestore] Failed to update expense template:', error);
+    throw error;
+  }
+}
+
+export async function deleteExpenseTemplate(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'expenseTemplates', id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error('[Firestore] Failed to delete expense template:', error);
     throw error;
   }
 }

@@ -132,15 +132,82 @@ export const appRouter = router({
         currency: z.string().default("BRL"),
         category: z.string().optional(),
         date: z.date(),
+        paidBy: z.string().optional(), // novo: quem realmente pagou
         allowMemberEdits: z.boolean().default(false),
+        attachmentUrl: z.string().url().optional(), // URL do anexo no Storage
+        // Novos campos para divisão flexível
+        splitMode: z.enum(["equal", "fixed", "percentage", "proportional", "single"]).default("equal"),
+        customSplits: z.array(z.object({
+          userId: z.string(),
+          value: z.number(), // valor fixo (centavos), porcentagem (0-100) ou peso
+        })).optional(),
+        // Recorrência/Parcelas
+        isRecurring: z.boolean().optional(),
+        recurringFrequency: z.enum(["weekly", "monthly", "yearly"]).optional(),
+        isInstallment: z.boolean().optional(),
+        totalInstallments: z.number().int().positive().optional(),
+        // Splits legados (compatibilidade)
         splits: z.array(z.object({
           userId: z.string(),
           amount: z.number().int().positive(),
-        })),
+        })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
         if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        // Calcular splits baseado no splitMode
+        let finalSplits: Array<{ userId: string; amount: number }> = [];
+        
+        if (input.splitMode === "single") {
+          // Somente uma pessoa paga tudo (quem pagou)
+          const payerId = input.paidBy || ctx.user.id!;
+          finalSplits = [{
+            userId: payerId,
+            amount: input.amount,
+          }];
+        } else if (input.splitMode === "equal" || !input.customSplits) {
+          // Divisão igual entre todos os membros do grupo
+          const members = await db.getGroupMembers(input.groupId);
+          const amountPerPerson = Math.floor(input.amount / members.length);
+          finalSplits = members.map(m => ({
+            userId: m.user.id,
+            amount: amountPerPerson,
+          }));
+        } else if (input.splitMode === "fixed") {
+          // Valores fixos por pessoa
+          finalSplits = input.customSplits.map(cs => ({
+            userId: cs.userId,
+            amount: cs.value, // já em centavos
+          }));
+        } else if (input.splitMode === "percentage") {
+          // Porcentagens
+          finalSplits = input.customSplits.map(cs => ({
+            userId: cs.userId,
+            amount: Math.floor((input.amount * cs.value) / 100),
+          }));
+        } else if (input.splitMode === "proportional") {
+          // Proporcional à renda
+          const members = await db.getGroupMembers(input.groupId);
+          const memberIncomes = new Map<string, number>();
+          
+          for (const m of members) {
+            // Buscar monthlyIncome do membro (precisa adicionar essa query)
+            const income = (m.member as any).monthlyIncome || 100000; // default 1000 reais
+            memberIncomes.set(m.user.id, income);
+          }
+          
+          const totalIncome = Array.from(memberIncomes.values()).reduce((sum, i) => sum + i, 0);
+          finalSplits = Array.from(memberIncomes.entries()).map(([userId, income]) => ({
+            userId,
+            amount: Math.floor((input.amount * income) / totalIncome),
+          }));
+        }
+
+        // Usar splits legados se fornecidos (backward compatibility)
+        if (input.splits && input.splits.length > 0) {
+          finalSplits = input.splits;
+        }
 
         const expenseId = await db.createSharedExpense({
           groupId: input.groupId,
@@ -149,20 +216,26 @@ export const appRouter = router({
           amount: input.amount,
           currency: input.currency,
           category: input.category,
-          paidBy: ctx.user.id!,
+          paidBy: input.paidBy || ctx.user.id!,
           date: input.date,
           createdBy: ctx.user.id!,
           status: "pending",
           allowMemberEdits: input.allowMemberEdits ?? false,
+          splitMode: input.splitMode,
+          customSplits: input.customSplits,
+          isRecurring: input.isRecurring,
+          recurringFrequency: input.recurringFrequency,
+          isInstallment: input.isInstallment,
+          totalInstallments: input.totalInstallments,
         });
 
         // Criar splits
-        for (const split of input.splits) {
+        for (const split of finalSplits) {
           await db.createExpenseSplit({
             expenseId,
             userId: split.userId,
             amount: split.amount,
-            paid: split.userId === ctx.user.id, // Quem pagou já está quitado
+            paid: split.userId === (input.paidBy || ctx.user.id), // Quem pagou já está quitado
             groupId: input.groupId,
           });
         }
@@ -635,11 +708,9 @@ export const appRouter = router({
   // ============ NOTIFICATIONS ROUTER ============
   notifications: router({
     list: protectedProcedure
-      .input(z.object({
-        unreadOnly: z.boolean().default(false),
-      }).optional())
+      .input(z.object({ unreadOnly: z.boolean().default(false) }).optional())
       .query(async ({ ctx, input }) => {
-        return await db.getUserNotifications(ctx.user.id!, input?.unreadOnly);
+        return await db.getUserNotifications(ctx.user.id!, input?.unreadOnly ?? false);
       }),
 
     markAsRead: protectedProcedure
@@ -649,14 +720,258 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
-      await db.markAllNotificationsAsRead(ctx.user.id!);
-      return { success: true };
-    }),
+    markAllAsRead: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        await db.markAllNotificationsAsRead(ctx.user.id!);
+        return { success: true };
+      }),
 
-    getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUnreadNotificationCount(ctx.user.id!);
-    }),
+    getUnreadCount: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getUnreadNotificationCount(ctx.user.id!);
+      }),
+  }),
+
+  // ============ SETTLEMENTS (ACERTOS DE CONTAS) ============
+  settlements: router({
+    create: protectedProcedure
+      .input(z.object({
+        groupId: z.string(),
+        toUserId: z.string(),
+        amount: z.number().int().positive(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const settlementId = await db.createSettlement({
+          groupId: input.groupId,
+          fromUserId: ctx.user.id!,
+          toUserId: input.toUserId,
+          amount: input.amount,
+          description: input.description,
+          settledAt: new Date(),
+          createdBy: ctx.user.id!,
+        });
+
+        // Criar notificação para quem recebeu
+        await db.createNotification({
+          userId: input.toUserId,
+          type: "general",
+          title: "Acerto de contas registrado",
+          message: `${ctx.user.name} registrou um pagamento de R$ ${(input.amount / 100).toFixed(2)} para você`,
+          relatedId: settlementId,
+          read: false,
+        });
+
+        return { settlementId };
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        return await db.getGroupSettlements(input.groupId);
+      }),
+
+    // Calcular saldos do grupo (quem deve a quem)
+    calculateBalances: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const expenses = await db.getGroupSharedExpenses(input.groupId);
+        const settlements = await db.getGroupSettlements(input.groupId);
+        const members = await db.getGroupMembers(input.groupId);
+
+        // Mapa de saldos (positivo = tem a receber, negativo = deve)
+        const balances = new Map<string, number>();
+        members.forEach(m => balances.set(m.user.id, 0));
+
+        // Processar despesas
+        for (const item of expenses) {
+          const expense = item.expense;
+          const paidBy = expense.paidBy;
+          const splits = await db.getExpenseSplits(expense.id);
+
+          // Quem pagou tem crédito
+          balances.set(paidBy, (balances.get(paidBy) || 0) + expense.amount);
+
+          // Cada pessoa que deve tem débito
+          for (const { split } of splits) {
+            balances.set(split.userId, (balances.get(split.userId) || 0) - split.amount);
+          }
+        }
+
+        // Processar acertos de contas
+        for (const settlement of settlements) {
+          // Quem pagou perde saldo
+          balances.set(settlement.fromUserId, (balances.get(settlement.fromUserId) || 0) - settlement.amount);
+          // Quem recebeu ganha saldo
+          balances.set(settlement.toUserId, (balances.get(settlement.toUserId) || 0) + settlement.amount);
+        }
+
+        // Converter para array
+        const result = Array.from(balances.entries()).map(([userId, balance]) => {
+          const member = members.find(m => m.user.id === userId);
+          return {
+            userId,
+            userName: member?.user.name || "Desconhecido",
+            balance, // em centavos
+          };
+        });
+
+        return result;
+      }),
+  }),
+
+  // ============ EXPENSE TEMPLATES (RECORRENTES) ============
+  expenseTemplates: router({
+    create: protectedProcedure
+      .input(z.object({
+        groupId: z.string(),
+        title: z.string().min(1).max(255),
+        description: z.string().optional(),
+        amount: z.number().int().positive(),
+        currency: z.string().default("BRL"),
+        category: z.string().optional(),
+        paidBy: z.string(),
+        splitMode: z.enum(["equal", "fixed", "percentage", "proportional", "single"]).default("equal"),
+        customSplits: z.array(z.object({
+          userId: z.string(),
+          value: z.number(),
+        })).optional(),
+        frequency: z.enum(["weekly", "monthly", "yearly"]),
+        dayOfWeek: z.number().min(0).max(6).optional(),
+        dayOfMonth: z.number().min(1).max(31).optional(),
+        monthOfYear: z.number().min(1).max(12).optional(),
+        nextDueDate: z.date(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const templateId = await db.createExpenseTemplate({
+          ...input,
+          isActive: true,
+          createdBy: ctx.user.id!,
+        });
+
+        return { templateId };
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        return await db.getGroupExpenseTemplates(input.groupId);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.string(),
+        isActive: z.boolean().optional(),
+        nextDueDate: z.date().optional(),
+        amount: z.number().int().positive().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        await db.updateExpenseTemplate(id, data);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deleteExpenseTemplate(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ GROUP MEMBERS EXTENDED ============
+  groupMembers: router({
+    updateFinancialProfile: protectedProcedure
+      .input(z.object({
+        groupId: z.string(),
+        userId: z.string(),
+        monthlyIncome: z.number().int().nonnegative().optional(),
+        incomeVisible: z.boolean().optional(),
+        customWeight: z.number().positive().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await db.getGroupById(input.groupId) as any;
+        if (!group) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // Apenas o próprio usuário ou o owner podem atualizar
+        const isOwner = group.ownerId === ctx.user.id;
+        const isSelf = input.userId === ctx.user.id;
+        if (!isOwner && !isSelf) throw new TRPCError({ code: "FORBIDDEN" });
+
+        await db.updateGroupMember(input.groupId, input.userId, {
+          monthlyIncome: input.monthlyIncome,
+          incomeVisible: input.incomeVisible,
+          customWeight: input.customWeight,
+        });
+
+        return { success: true };
+      }),
+  }),
+
+  // ============ EXPENSE CATEGORIES (CATEGORIAS PERSONALIZADAS) ============
+  expenseCategories: router({
+    create: protectedProcedure
+      .input(z.object({
+        groupId: z.string(),
+        name: z.string().min(1).max(100),
+        icon: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const categoryId = await db.createExpenseCategory({
+          groupId: input.groupId,
+          name: input.name,
+          icon: input.icon,
+          createdBy: ctx.user.id!,
+        });
+
+        return { categoryId };
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        return await db.getGroupExpenseCategories(input.groupId);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.string(),
+        name: z.string().min(1).max(100).optional(),
+        icon: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        await db.updateExpenseCategory(id, data);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deleteExpenseCategory(input.id);
+        return { success: true };
+      }),
   }),
 
   // ============ REPORTS ROUTER ============

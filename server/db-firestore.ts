@@ -494,3 +494,78 @@ export async function getUnreadNotificationCount(userId: string) {
   const snap = await db.collection("notifications").where("userId", "==", userId).where("read", "==", false).get();
   return snap.size;
 }
+
+// ============ SETTLEMENTS ============
+export async function createSettlement(data: any) {
+  const db = adminDb();
+  const ref = await db.collection("settlements").add({ ...omitUndefined(data), ...nowCreate() });
+  return ref.id;
+}
+
+export async function getGroupSettlements(groupId: string) {
+  const db = adminDb();
+  const snap = await db.collection("settlements").where("groupId", "==", groupId).orderBy("settledAt", "desc").get();
+  return snap.docs.map(d => ({ id: d.id, ...normalize(d.data()) }));
+}
+
+// ============ EXPENSE TEMPLATES ============
+export async function createExpenseTemplate(data: any) {
+  const db = adminDb();
+  const ref = await db.collection("expenseTemplates").add({ ...omitUndefined(data), ...nowCreate() });
+  return ref.id;
+}
+
+export async function getGroupExpenseTemplates(groupId: string) {
+  const db = adminDb();
+  const snap = await db.collection("expenseTemplates").where("groupId", "==", groupId).where("isActive", "==", true).get();
+  return snap.docs.map(d => ({ id: d.id, ...normalize(d.data()) }));
+}
+
+export async function updateExpenseTemplate(id: string, data: any) {
+  const db = adminDb();
+  await db.collection("expenseTemplates").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
+}
+
+export async function deleteExpenseTemplate(id: string) {
+  const db = adminDb();
+  await db.collection("expenseTemplates").doc(id).delete();
+}
+
+// ============ EXPENSE CATEGORIES (CATEGORIAS PERSONALIZADAS) ============
+export async function createExpenseCategory(data: {
+  groupId: string;
+  name: string;
+  icon?: string;
+  createdBy: string;
+}): Promise<string> {
+  const db = adminDb();
+  const ref = await db.collection("expenseCategories").add({
+    ...data,
+    ...nowCreate(),
+  });
+  return ref.id;
+}
+
+export async function getGroupExpenseCategories(groupId: string) {
+  const db = adminDb();
+  const snap = await db.collection("expenseCategories").where("groupId", "==", groupId).orderBy("createdAt", "desc").get();
+  return snap.docs.map(doc => normalize({ id: doc.id, ...doc.data() }));
+}
+
+export async function updateExpenseCategory(id: string, data: { name?: string; icon?: string }) {
+  const db = adminDb();
+  await db.collection("expenseCategories").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
+}
+
+export async function deleteExpenseCategory(id: string) {
+  const db = adminDb();
+  await db.collection("expenseCategories").doc(id).delete();
+}
+
+export async function updateGroupMember(groupId: string, userId: string, data: any) {
+  const db = adminDb();
+  const snap = await db.collection("groupMembers").where("groupId", "==", groupId).where("userId", "==", userId).limit(1).get();
+  if (!snap.empty) {
+    await snap.docs[0].ref.set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
+  }
+}

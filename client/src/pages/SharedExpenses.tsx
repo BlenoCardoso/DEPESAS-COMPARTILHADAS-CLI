@@ -12,8 +12,10 @@ import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { SplitCalculator } from "@/components/SplitCalculator";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { uploadExpenseAttachment, validateImageFile } from "@/lib/storage";
+import { CheckCircle2, Loader2, MoreVertical, Pencil, Plus, Trash2, Paperclip, X, Image as ImageIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
@@ -21,6 +23,7 @@ import { formatCents, userLabel } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/useMobile";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import type { SplitMode, CustomSplit } from "@/server/firestore-db";
 
 export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
@@ -33,6 +36,12 @@ export default function SharedExpenses() {
   const [category, setCategory] = useState("");
   const [date, setDate] = useState<string>(() => new Date().toISOString().substring(0, 10));
   const [allowMemberEdits, setAllowMemberEdits] = useState(false);
+  const [splitMode, setSplitMode] = useState<SplitMode>("equal");
+  const [customSplits, setCustomSplits] = useState<CustomSplit[]>([]);
+  const [paidBy, setPaidBy] = useState<string>("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   // filtros
   const [filterText, setFilterText] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -98,6 +107,11 @@ export default function SharedExpenses() {
       setAmount("");
       setCategory("");
       setAllowMemberEdits(false);
+      setSplitMode("equal");
+      setCustomSplits([]);
+      setPaidBy("");
+      setAttachmentFile(null);
+      setAttachmentPreview(null);
       refetch();
     },
     onError: e => toast.error(e.message),
@@ -143,7 +157,32 @@ export default function SharedExpenses() {
     }));
   }, [membersQuery.data, amount]);
 
-  const handleCreate = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return;
+    }
+
+    setAttachmentFile(file);
+    
+    // Criar preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setAttachmentPreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
+  };
+
+  const handleCreate = async () => {
     if (!groupId) return;
     const amt = parseInt(amount, 10);
     if (!title.trim() || !amt) {
@@ -154,7 +193,18 @@ export default function SharedExpenses() {
       toast.error("Não foi possível gerar splits");
       return;
     }
-    createMutation.mutate({
+
+    try {
+      let attachmentUrl: string | undefined;
+      
+      // Upload de anexo se houver
+      if (attachmentFile && groupId) {
+        setUploadingAttachment(true);
+        const tempId = `temp_${Date.now()}`; // ID temporário até criar despesa
+        attachmentUrl = await uploadExpenseAttachment(groupId, tempId, attachmentFile, user?.id || "");
+      }
+
+      createMutation.mutate({
       groupId,
       title,
       amount: amt,
@@ -162,9 +212,18 @@ export default function SharedExpenses() {
       currency: "BRL",
       category: category || undefined,
       allowMemberEdits,
+      splitMode,
+      customSplits: customSplits.length > 0 ? customSplits : undefined,
+      paidBy: paidBy || undefined,
+      attachmentUrl,
       // description omitida para evitar envio de undefined
       splits,
     });
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao fazer upload do anexo");
+    } finally {
+      setUploadingAttachment(false);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -365,56 +424,100 @@ export default function SharedExpenses() {
                 <Plus className="h-4 w-4" /> Nova despesa
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Nova Despesa</DialogTitle>
-                  <DialogDescription>Divida automaticamente entre membros do grupo</DialogDescription>
+                  <DialogTitle className="text-base">Nova Despesa</DialogTitle>
+                  <DialogDescription className="text-xs">Divida entre membros do grupo</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-2">
-                    <Label>Título *</Label>
-                    <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Mercado" />
+                <div className="space-y-3 py-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Título *</Label>
+                    <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Mercado" className="h-9" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Valor (centavos) *</Label>
-                    <Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 2599" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Valor (centavos) *</Label>
+                    <Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 2599" className="h-9" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="Ex: Alimentação" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Categoria</Label>
+                    <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="Ex: Alimentação" className="h-9" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Data</Label>
-                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Data</Label>
+                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
+                  <div className="flex items-center justify-between rounded-2xl border border-border/60 p-2.5">
                     <div>
-                      <Label className="text-sm">Permitir que membros editem</Label>
-                      <p className="text-xs text-muted-foreground">Quando ativo, qualquer membro pode colaborar.</p>
+                      <Label className="text-xs">Permitir edição</Label>
+                      <p className="text-[10px] text-muted-foreground">Membros podem colaborar</p>
                     </div>
                     <Switch checked={allowMemberEdits} onCheckedChange={setAllowMemberEdits} />
                   </div>
-                  {splits.length > 0 && (
-                    <Card className="border border-dashed">
-                      <CardHeader>
-                        <CardTitle className="text-sm">Divisão automática</CardTitle>
-                        <CardDescription className="text-xs">Valores por participante (centavos)</CardDescription>
-                      </CardHeader>
-                      <CardContent className="grid grid-cols-2 gap-2 text-xs">
-                        {splits.map(s => (
-                          <div key={s.userId} className="flex justify-between">
-                            <span>{userLabel(membersQuery.data?.find(m => m.user.id === s.userId)?.user, user || undefined) || s.userId}</span>
-                            <span className="font-medium">{s.amount}</span>
+                  
+                  <SplitCalculator
+                    members={membersQuery.data || []}
+                    totalAmount={parseInt(amount) || 0}
+                    splitMode={splitMode}
+                    customSplits={customSplits}
+                    onSplitModeChange={setSplitMode}
+                    onCustomSplitsChange={setCustomSplits}
+                    paidBy={paidBy}
+                    onPaidByChange={setPaidBy}
+                  />
+
+                  {/* Anexo / Comprovante */}
+                  <div className="space-y-2">
+                    <Label className="text-xs flex items-center gap-2">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Anexar Comprovante (opcional)
+                    </Label>
+                    {attachmentPreview ? (
+                      <div className="relative rounded-lg border border-border overflow-hidden">
+                        <img 
+                          src={attachmentPreview} 
+                          alt="Preview" 
+                          className="w-full h-48 object-cover"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 right-2 h-8 w-8"
+                          onClick={handleRemoveAttachment}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type="file"
+                          id="attachment-input"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleFileSelect}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full h-24 border-dashed"
+                          onClick={() => document.getElementById('attachment-input')?.click()}
+                        >
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <ImageIcon className="h-8 w-8" />
+                            <span className="text-xs">Clique para adicionar foto</span>
+                            <span className="text-[10px]">JPG, PNG ou WebP (máx 10MB)</span>
                           </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                    {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Criar
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="h-9">Cancelar</Button>
+                  <Button onClick={handleCreate} disabled={createMutation.isPending || uploadingAttachment} className="h-9">
+                    {(createMutation.isPending || uploadingAttachment) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    {uploadingAttachment ? "Enviando..." : "Criar"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -535,6 +638,33 @@ export default function SharedExpenses() {
                 <div className="flex justify-between"><span>Data</span><span>{new Date(detailQuery.data.expense.date).toLocaleDateString('pt-BR')}</span></div>
                 <div className="flex justify-between"><span>Status</span><span className="capitalize">{detailQuery.data.expense.status}</span></div>
               </div>
+              
+              {/* Anexo */}
+              {detailQuery.data.expense.attachmentUrl && (
+                <div className="space-y-2">
+                  <Label className="text-xs flex items-center gap-2">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Comprovante Anexado
+                  </Label>
+                  <div className="rounded-lg border overflow-hidden">
+                    <img 
+                      src={detailQuery.data.expense.attachmentUrl} 
+                      alt="Comprovante" 
+                      className="w-full max-h-64 object-contain bg-muted"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => window.open(detailQuery.data.expense.attachmentUrl, '_blank')}
+                  >
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Abrir em tela cheia
+                  </Button>
+                </div>
+              )}
+              
               <div className="flex items-center justify-between rounded-md border p-3 text-sm">
                 <div>
                   <p className="font-medium">Edição por membros</p>
@@ -624,6 +754,9 @@ export default function SharedExpenses() {
                       >
                         <p className="truncate text-sm font-semibold underline-offset-4 hover:underline">
                           {e.expense.title}
+                          {e.expense.attachmentUrl && (
+                            <Paperclip className="ml-2 inline h-3.5 w-3.5 text-muted-foreground" />
+                          )}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <Badge variant={e.expense.status === "validated" ? "secondary" : "outline"} className="rounded-full text-[11px]">

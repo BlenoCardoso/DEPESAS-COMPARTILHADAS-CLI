@@ -24,6 +24,10 @@ import {
   Wallet,
   Smartphone,
   Monitor,
+  TrendingUp,
+  ArrowLeftRight,
+  Repeat,
+  Folder,
 } from "lucide-react";
 import { ReactNode, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -40,6 +44,9 @@ const PRIMARY_NAV: NavItem[] = [
   { icon: Users, label: "Grupos", path: "/groups" },
   { icon: CreditCard, label: "Despesas Compartilhadas", path: "/shared-expenses" },
   { icon: Wallet, label: "Despesas Pessoais", path: "/personal-expenses" },
+  { icon: ArrowLeftRight, label: "Saldos do Grupo", path: "/group-balances" },
+  { icon: Repeat, label: "Despesas Recorrentes", path: "/expense-templates" },
+  { icon: Folder, label: "Categorias", path: "/expense-categories" },
   { icon: CheckSquare, label: "Tarefas", path: "/tasks" },
   { icon: Clock, label: "Lembretes", path: "/reminders" },
   { icon: Calendar, label: "Calendário", path: "/calendar" },
@@ -49,6 +56,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const SUPPORT_NAV: NavItem[] = [
   { icon: Bell, label: "Notificações", path: "/notifications", showBadge: true },
+  { icon: TrendingUp, label: "Perfil Financeiro", path: "/financial-profile" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 
@@ -64,7 +72,7 @@ interface MobileLayoutProps {
 }
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -78,6 +86,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const handleLogout = async () => {
     await logout();
     setIsMenuOpen(false);
+    setLocation("/");
   };
 
   const forceMobile = useMemo(() => {
