@@ -809,10 +809,11 @@ export const appRouter = router({
 
         // Processar acertos de contas
         for (const settlement of settlements) {
+          const s = settlement as any;
           // Quem pagou perde saldo
-          balances.set(settlement.fromUserId, (balances.get(settlement.fromUserId) || 0) - settlement.amount);
+          balances.set(s.fromUserId, (balances.get(s.fromUserId) || 0) - s.amount);
           // Quem recebeu ganha saldo
-          balances.set(settlement.toUserId, (balances.get(settlement.toUserId) || 0) + settlement.amount);
+          balances.set(s.toUserId, (balances.get(s.toUserId) || 0) + s.amount);
         }
 
         // Converter para array

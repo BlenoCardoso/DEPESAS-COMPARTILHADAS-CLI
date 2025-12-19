@@ -16,32 +16,43 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [homeView, setHomeView] = useState<"summary" | "actions">("summary");
 
-  const { data: groups } = trpc.groups.list.useQuery(undefined, {
+  // Queries com cache otimizado (5 minutos de staleTime)
+  const { data: groups, isLoading: groupsLoading } = trpc.groups.list.useQuery(undefined, {
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    gcTime: 10 * 60 * 1000, // 10 minutos (antigo cacheTime)
   });
   const groupsList = Array.isArray(groups) ? groups : [];
 
-  const { data: unreadCount } = trpc.notifications.getUnreadCount.useQuery(undefined, {
+  const { data: unreadCount, isLoading: unreadLoading } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+    staleTime: 1 * 60 * 1000, // 1 minuto
   });
-  const { data: notifications } = trpc.notifications.list.useQuery(undefined, {
+  
+  const { data: notifications, isLoading: notificationsLoading } = trpc.notifications.list.useQuery(undefined, {
     enabled: isAuthenticated,
+    staleTime: 2 * 60 * 1000, // 2 minutos
   });
   const notificationsCount = notifications?.length ?? 0;
 
-  const { data: personalExpenses } = trpc.personalExpenses.list.useQuery(undefined, {
+  const { data: personalExpenses, isLoading: personalLoading } = trpc.personalExpenses.list.useQuery(undefined, {
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   });
 
   const personalTotal = personalExpenses?.reduce((sum, e: any) => sum + (e.amount || 0), 0) || 0;
 
-  const { data: sharedCountData } = trpc.sharedExpenses.countForUser.useQuery(undefined, {
+  const { data: sharedCountData, isLoading: sharedLoading } = trpc.sharedExpenses.countForUser.useQuery(undefined, {
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   });
 
   const firstName = user?.name?.split(" ")[0] ?? "";
+  
+  // Loading state unificado
+  const isLoadingData = groupsLoading || personalLoading || sharedLoading;
 
   if (loading) {
     return (
@@ -184,92 +195,160 @@ export default function Home() {
             </AccordionTrigger>
             <AccordionContent className="pt-3">
               <div className="space-y-2">
+                {/* Card Grupos com skeleton */}
                 <Link href="/groups">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                            <Users className="h-4 w-4" />
+                      {groupsLoading ? (
+                        <div className="flex items-start justify-between gap-3 animate-pulse">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 h-9 w-9 rounded-2xl bg-muted" />
+                            <div className="min-w-0 space-y-1.5">
+                              <div className="h-4 w-16 bg-muted rounded" />
+                              <div className="h-3 w-24 bg-muted rounded" />
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold">Grupos</p>
-                            <p className="text-[12px] text-muted-foreground truncate">
-                              {groupsList.length === 1 ? "1 grupo ativo" : `${groupsList.length} grupos ativos`}
-                            </p>
+                          <div className="text-right space-y-1.5">
+                            <div className="h-4 w-8 bg-muted rounded ml-auto" />
+                            <div className="h-3 w-12 bg-muted rounded ml-auto" />
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">{groupsList.length}</p>
-                          <p className="text-[11px] text-muted-foreground">ativos</p>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                              <Users className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold">Grupos</p>
+                              <p className="text-[12px] text-muted-foreground truncate">
+                                {groupsList.length === 1 ? "1 grupo ativo" : `${groupsList.length} grupos ativos`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{groupsList.length}</p>
+                            <p className="text-[11px] text-muted-foreground">ativos</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
 
+                {/* Card Despesas Compartilhadas com skeleton */}
                 <Link href="/shared-expenses">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
-                            <CreditCard className="h-4 w-4" />
+                      {sharedLoading ? (
+                        <div className="flex items-start justify-between gap-3 animate-pulse">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 h-9 w-9 rounded-2xl bg-muted" />
+                            <div className="min-w-0 space-y-1.5">
+                              <div className="h-4 w-20 bg-muted rounded" />
+                              <div className="h-3 w-28 bg-muted rounded" />
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold">Compart.</p>
-                            <p className="text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
+                          <div className="text-right space-y-1.5">
+                            <div className="h-4 w-8 bg-muted rounded ml-auto" />
+                            <div className="h-3 w-16 bg-muted rounded ml-auto" />
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">{sharedCountData?.count ?? 0}</p>
-                          <p className="text-[11px] text-muted-foreground">despesas</p>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
+                              <CreditCard className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold">Compart.</p>
+                              <p className="text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{sharedCountData?.count ?? 0}</p>
+                            <p className="text-[11px] text-muted-foreground">despesas</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
 
+                {/* Card Despesas Pessoais com skeleton */}
                 <Link href="/personal-expenses">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                            <Wallet className="h-4 w-4" />
+                      {personalLoading ? (
+                        <div className="flex items-start justify-between gap-3 animate-pulse">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 h-9 w-9 rounded-2xl bg-muted" />
+                            <div className="min-w-0 space-y-1.5">
+                              <div className="h-4 w-16 bg-muted rounded" />
+                              <div className="h-3 w-32 bg-muted rounded" />
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold">Pessoal</p>
-                            <p className="text-[12px] text-muted-foreground truncate">{formatCents(personalTotal)} total</p>
+                          <div className="text-right space-y-1.5">
+                            <div className="h-4 w-16 bg-muted rounded ml-auto" />
+                            <div className="h-3 w-12 bg-muted rounded ml-auto" />
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">{personalExpenses?.length ?? 0}</p>
-                          <p className="text-[11px] text-muted-foreground">itens</p>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                              <Wallet className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold">Pessoal</p>
+                              <p className="text-[12px] text-muted-foreground truncate">{formatCents(personalTotal)} total</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{personalExpenses?.length ?? 0}</p>
+                            <p className="text-[11px] text-muted-foreground">itens</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
 
+                {/* Card Notificações com skeleton */}
                 <Link href="/notifications">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-info/15 text-info">
-                            <Bell className="h-4 w-4" />
+                      {(unreadLoading || notificationsLoading) ? (
+                        <div className="flex items-start justify-between gap-3 animate-pulse">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 h-9 w-9 rounded-2xl bg-muted" />
+                            <div className="min-w-0 space-y-1.5">
+                              <div className="h-4 w-24 bg-muted rounded" />
+                              <div className="h-3 w-20 bg-muted rounded" />
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold">Notificações</p>
-                            <p className="text-[12px] text-muted-foreground truncate">Total: {notificationsCount}</p>
+                          <div className="text-right space-y-1.5">
+                            <div className="h-4 w-8 bg-muted rounded ml-auto" />
+                            <div className="h-3 w-16 bg-muted rounded ml-auto" />
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">{unreadCount || 0}</p>
-                          <p className="text-[11px] text-muted-foreground">não lidas</p>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-info/15 text-info">
+                              <Bell className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold">Notificações</p>
+                              <p className="text-[12px] text-muted-foreground truncate">Total: {notificationsCount}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{unreadCount || 0}</p>
+                            <p className="text-[11px] text-muted-foreground">não lidas</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
