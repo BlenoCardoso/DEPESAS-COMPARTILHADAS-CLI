@@ -139,6 +139,72 @@ export async function getUserGroups(userId: string) {
   return out;
 }
 
+export async function getUserGroupStats(userId: string) {
+  const db = adminDb();
+
+  const membershipSnap = await db
+    .collection("groupMembers")
+    .where("userId", "==", userId)
+    .get();
+
+  const groupIds = Array.from(
+    new Set(membershipSnap.docs.map((d) => String(d.get("groupId") ?? "")).filter(Boolean))
+  );
+
+  const membersCountByGroupId = new Map<string, number>();
+  const pendingExpensesCountByGroupId = new Map<string, number>();
+
+  const chunkSize = 10;
+  for (let i = 0; i < groupIds.length; i += chunkSize) {
+    const chunk = groupIds.slice(i, i + chunkSize);
+    if (chunk.length === 0) continue;
+
+    const membersSnap = await db
+      .collection("groupMembers")
+      .where("groupId", "in", chunk)
+      .get();
+
+    for (const doc of membersSnap.docs) {
+      const groupId = String(doc.get("groupId") ?? "");
+      if (!groupId) continue;
+      membersCountByGroupId.set(groupId, (membersCountByGroupId.get(groupId) ?? 0) + 1);
+    }
+
+    const pendingSnap = await db
+      .collection("sharedExpenses")
+      .where("groupId", "in", chunk)
+      .where("status", "==", "pending")
+      .get();
+
+    for (const doc of pendingSnap.docs) {
+      const groupId = String(doc.get("groupId") ?? "");
+      if (!groupId) continue;
+      pendingExpensesCountByGroupId.set(groupId, (pendingExpensesCountByGroupId.get(groupId) ?? 0) + 1);
+    }
+  }
+
+  return groupIds.map((groupId) => ({
+    groupId,
+    membersCount: membersCountByGroupId.get(groupId) ?? 0,
+    pendingExpensesCount: pendingExpensesCountByGroupId.get(groupId) ?? 0,
+  }));
+}
+
+export async function getGroupStats(groupId: string) {
+  const db = adminDb();
+
+  const [membersSnap, pendingSnap] = await Promise.all([
+    db.collection("groupMembers").where("groupId", "==", groupId).get(),
+    db.collection("sharedExpenses").where("groupId", "==", groupId).where("status", "==", "pending").get(),
+  ]);
+
+  return {
+    groupId,
+    membersCount: membersSnap.size,
+    pendingExpensesCount: pendingSnap.size,
+  };
+}
+
 export async function updateGroup(id: string, data: { name?: string; description?: string }) {
   const db = adminDb();
   await db.collection("groups").doc(id).set({ ...omitUndefined(data), ...nowUpdate() }, { merge: true });
@@ -277,6 +343,14 @@ export async function getExpenseSplits(expenseId: string) {
     if (uDoc.exists) out.push({ split: { id: d.id, ...split }, user: { id: uDoc.id, ...normalize(uDoc.data() || {}) } });
   }
   return out;
+}
+
+export async function getExpenseSplitById(id: string) {
+  const db = adminDb();
+  const doc = await db.collection("expenseSplits").doc(id).get();
+  if (!doc.exists) return undefined;
+  const split = normalize(doc.data() || {});
+  return { id: doc.id, ...split };
 }
 
 export async function markSplitAsPaid(id: string) {

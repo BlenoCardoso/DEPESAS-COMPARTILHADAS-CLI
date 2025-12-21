@@ -20,24 +20,23 @@ const CalendarEmptyIllustration = () => (
     viewBox="0 0 220 170"
     role="img"
     aria-hidden="true"
-    className="mx-auto h-36 w-48"
+    className="mx-auto h-36 w-48 text-primary/20"
   >
-    <defs>
-      <linearGradient id="calendarSheet" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#7C5DFA" stopOpacity="0.65" />
-        <stop offset="100%" stopColor="#42C5C0" stopOpacity="0.65" />
-      </linearGradient>
-      <radialGradient id="calendarShadow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#000" stopOpacity="0.25" />
-        <stop offset="100%" stopColor="#000" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <ellipse cx="110" cy="152" rx="70" ry="16" fill="url(#calendarShadow)" opacity="0.25" />
-    <rect x="34" y="30" width="154" height="106" rx="26" fill="url(#calendarSheet)" opacity="0.15" />
-    <rect x="26" y="44" width="148" height="100" rx="22" fill="#ffffff" stroke="#e5e1ff" strokeWidth="2" />
-    <rect x="26" y="44" width="148" height="34" rx="18" fill="#f5f2ff" />
-    <circle cx="62" cy="47" r="12" fill="#7C5DFA" />
-    <circle cx="138" cy="47" r="12" fill="#42C5C0" />
+    <ellipse cx="110" cy="152" rx="70" ry="16" fill="currentColor" opacity="0.12" />
+    <rect x="34" y="30" width="154" height="106" rx="26" fill="currentColor" opacity="0.16" />
+    <rect
+      x="26"
+      y="44"
+      width="148"
+      height="100"
+      rx="22"
+      fill="hsl(var(--card))"
+      stroke="hsl(var(--border))"
+      strokeWidth="2"
+    />
+    <rect x="26" y="44" width="148" height="34" rx="18" fill="hsl(var(--muted))" opacity="0.55" />
+    <circle cx="62" cy="47" r="12" fill="hsl(var(--primary))" opacity="0.65" />
+    <circle cx="138" cy="47" r="12" fill="hsl(var(--secondary))" opacity="0.65" />
     {[0, 1, 2].map((row) => (
       <g key={row} transform={`translate(46 ${92 + row * 18})`}>
         {[0, 1, 2, 3].map((col) => (
@@ -48,13 +47,14 @@ const CalendarEmptyIllustration = () => (
             width={16}
             height={12}
             rx={4}
-            fill="#f1f0ff"
+            fill="hsl(var(--muted))"
+            opacity="0.85"
           />
         ))}
       </g>
     ))}
-    <rect x="78" y="104" width="32" height="20" rx="6" fill="#FFB892" opacity="0.8" />
-    <rect x="114" y="122" width="28" height="16" rx="5" fill="#42C5C0" opacity="0.7" />
+    <rect x="78" y="104" width="32" height="20" rx="6" fill="hsl(var(--accent))" opacity="0.35" />
+    <rect x="114" y="122" width="28" height="16" rx="5" fill="hsl(var(--secondary))" opacity="0.35" />
   </svg>
 );
 
@@ -135,14 +135,29 @@ export default function Calendar() {
 
   const getEventAccent = (isAllDay: boolean) =>
     isAllDay
-      ? "bg-gradient-to-br from-secondary/20 to-secondary/5"
-      : "bg-gradient-to-br from-primary/15 to-primary/5";
+      ? "bg-secondary/10"
+      : "bg-primary/10";
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Calendário</h1>
-        <p className="text-sm text-muted-foreground">Eventos por data e hora.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold sm:text-3xl">Calendário</h1>
+            <p className="text-sm text-muted-foreground">Organize eventos por data e hora.</p>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              "shrink-0 rounded-full text-[11px] border " +
+              (stats.today > 0
+                ? "bg-warning/15 text-warning border-warning/25"
+                : "bg-primary/10 text-primary border-primary/20")
+            }
+          >
+            {stats.today > 0 ? `Hoje: ${stats.today}` : `Próximos: ${stats.upcoming}`}
+          </Badge>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
@@ -294,10 +309,10 @@ export default function Calendar() {
               <CalendarEmptyIllustration />
             </div>
             <div className="space-y-2">
-              <p className="text-base font-semibold">Agenda tranquila por aqui</p>
-              <p className="text-sm text-muted-foreground">Que tal marcar o primeiro compromisso agora?</p>
+              <p className="text-base font-semibold">Nenhum evento</p>
+              <p className="text-sm text-muted-foreground">Crie seu primeiro evento.</p>
             </div>
-            <Button onClick={() => setIsCreateOpen(true)} className="interactive-tap rounded-2xl">Criar primeiro evento</Button>
+            <Button onClick={() => setIsCreateOpen(true)} className="interactive-tap rounded-2xl">Criar primeiro</Button>
           </CardContent>
         </Card>
       ) : (
@@ -323,6 +338,17 @@ export default function Calendar() {
               const isAllDay = Boolean((ev as any).allDay);
               const start = (ev as any).startDate ? new Date((ev as any).startDate) : null;
               const end = (ev as any).endDate ? new Date((ev as any).endDate) : null;
+
+              const isToday = (() => {
+                if (!start || Number.isNaN(start.getTime())) return false;
+                const now = new Date();
+                const startOfDay = new Date(now);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(now);
+                endOfDay.setHours(23, 59, 59, 999);
+                return start >= startOfDay && start <= endOfDay;
+              })();
+
               const startLabel = start
                 ? isAllDay
                   ? start.toLocaleDateString("pt-BR")
@@ -353,6 +379,14 @@ export default function Calendar() {
                           {isAllDay ? (
                             <Badge variant="secondary" className="h-5 rounded-full px-2 text-[11px]">
                               Dia inteiro
+                            </Badge>
+                          ) : null}
+                          {isToday ? (
+                            <Badge
+                              variant="outline"
+                              className="h-5 rounded-full px-2 text-[11px] bg-warning/15 text-warning border-warning/25"
+                            >
+                              Hoje
                             </Badge>
                           ) : null}
                         </div>

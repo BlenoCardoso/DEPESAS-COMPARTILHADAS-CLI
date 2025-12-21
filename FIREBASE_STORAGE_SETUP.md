@@ -24,18 +24,18 @@ service firebase.storage {
     match /expense-attachments/{groupId}/{expenseId}/{fileName} {
       // Permitir leitura para membros do grupo
       allow read: if request.auth != null 
-        && exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
+        && firestore.exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
       
       // Permitir upload (max 10MB) para membros autenticados
       allow write: if request.auth != null
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*')
-        && exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
+        && firestore.exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
       
       // Permitir delete apenas do criador ou owner do grupo
       allow delete: if request.auth != null
         && (resource.metadata.uploadedBy == request.auth.uid 
-            || get(/databases/(default)/documents/groups/$(groupId)).data.ownerId == request.auth.uid);
+            || firestore.get(/databases/(default)/documents/groups/$(groupId)).data.ownerId == request.auth.uid);
     }
     
     // Pasta de avatars de usuários (opcional futura)
@@ -76,9 +76,9 @@ service firebase.storage {
              └── recibo.jpg
    ```
 
-### 4. Obter Configuração do Storage (já está no firebase.json)
+### 4. Obter Configuração do Storage
 
-Seu arquivo `firebase.json` já deve ter:
+Este repositório já inclui a configuração no `firebase.json` apontando para `storage.rules`:
 
 ```json
 {
@@ -88,7 +88,7 @@ Seu arquivo `firebase.json` já deve ter:
 }
 ```
 
-Se não tiver, adicione essa seção.
+Se você mudou o nome do arquivo de regras, ajuste o caminho aqui.
 
 ## 🔧 Como funciona no App
 

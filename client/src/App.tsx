@@ -151,11 +151,7 @@ function App() {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       initPushNotifications().then((token) => {
-        if (token) {
-          console.log('FCM Token:', token);
-          // Aqui você pode salvar o token no backend para enviar notificações
-          // TODO: trpc.notifications.saveFcmToken.mutate({ token });
-        }
+        void token;
       });
       
       setupPushNotificationListeners();

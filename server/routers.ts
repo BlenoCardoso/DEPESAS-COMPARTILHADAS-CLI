@@ -49,6 +49,18 @@ export const appRouter = router({
       return result;
     }),
 
+    myStats: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getUserGroupStats(ctx.user.id!);
+    }),
+
+    stats: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+        return await db.getGroupStats(input.groupId);
+      }),
+
     getById: protectedProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ ctx, input }) => {
@@ -306,6 +318,7 @@ export const appRouter = router({
         category: z.string().optional(),
         date: z.date().optional(),
         allowMemberEdits: z.boolean().optional(),
+        attachmentUrl: z.string().url().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const expense = await db.getSharedExpenseById(input.id) as any;
@@ -326,6 +339,7 @@ export const appRouter = router({
           amount: input.amount,
           category: input.category,
           date: input.date,
+          attachmentUrl: input.attachmentUrl,
           allowMemberEdits: input.allowMemberEdits,
         });
 
@@ -370,6 +384,17 @@ export const appRouter = router({
     markSplitPaid: protectedProcedure
       .input(z.object({ splitId: z.string() }))
       .mutation(async ({ ctx, input }) => {
+        const split = await db.getExpenseSplitById(input.splitId) as any;
+        if (!split) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const isMember = await db.isUserInGroup(ctx.user.id!, split.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const group = await db.getGroupById(split.groupId) as any;
+        const isGroupOwner = group?.ownerId && group.ownerId === ctx.user.id;
+        const isSelf = split.userId === ctx.user.id;
+        if (!isSelf && !isGroupOwner) throw new TRPCError({ code: "FORBIDDEN" });
+
         await db.markSplitAsPaid(input.splitId);
         return { success: true };
       }),
@@ -637,14 +662,26 @@ export const appRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const items = await db.getUserInvitations(ctx.user.id!);
       const userEmail = ctx.user.email?.toLowerCase();
-      return items.map((inv: any) => {
+      const out: any[] = [];
+      for (const inv of items as any[]) {
         const isPending = inv.status === "pending";
         const isRecipientById = inv.invitedUserId && inv.invitedUserId === ctx.user.id;
         const isRecipientByEmail = userEmail && typeof inv.invitedEmail === "string" && inv.invitedEmail.toLowerCase() === userEmail;
         const canRespond = isPending && (isRecipientById || isRecipientByEmail);
         const canCancel = isPending && inv.invitedBy === ctx.user.id!;
-        return { ...inv, canRespond, canCancel };
-      });
+        const [group, invitedByUser] = await Promise.all([
+          inv.groupId ? db.getGroupById(inv.groupId) : Promise.resolve(undefined),
+          inv.invitedBy ? db.getUserById(inv.invitedBy) : Promise.resolve(undefined),
+        ]);
+        out.push({
+          ...inv,
+          canRespond,
+          canCancel,
+          group: group ? { id: (group as any).id, name: (group as any).name } : undefined,
+          invitedByUser: invitedByUser ? { id: (invitedByUser as any).id, name: (invitedByUser as any).name, email: (invitedByUser as any).email, avatarUrl: (invitedByUser as any).avatarUrl } : undefined,
+        });
+      }
+      return out;
     }),
 
     respond: protectedProcedure

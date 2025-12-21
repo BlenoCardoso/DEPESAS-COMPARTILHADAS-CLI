@@ -129,7 +129,7 @@ export default function ExpenseCategories() {
   };
 
   if (!isAuthenticated) {
-    return <PageContainer title="Categorias de Despesas">Você precisa estar autenticado</PageContainer>;
+    return <PageContainer title="Categorias de Despesas">Faça login para continuar.</PageContainer>;
   }
 
   const customCategories = categoriesQuery.data || [];
@@ -244,7 +244,7 @@ export default function ExpenseCategories() {
                       key={category.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                      className="flex items-center gap-3 p-3 rounded-2xl border bg-card"
                     >
                       <span className="text-2xl">{category.icon}</span>
                       <span className="font-medium flex-1">{category.name}</span>
@@ -273,7 +273,7 @@ export default function ExpenseCategories() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Folder className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Nenhuma categoria personalizada criada</p>
-                    <p className="text-xs mt-1">Clique em "Nova Categoria" para adicionar</p>
+                    <p className="text-xs mt-1">Crie a primeira quando precisar.</p>
                   </div>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -282,7 +282,7 @@ export default function ExpenseCategories() {
                         key={category.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors"
+                        className="flex items-center gap-3 p-3 rounded-2xl border bg-card hover:border-primary/50 transition-colors"
                       >
                         <span className="text-2xl">{category.icon || "📦"}</span>
                         <span className="font-medium flex-1">{category.name}</span>

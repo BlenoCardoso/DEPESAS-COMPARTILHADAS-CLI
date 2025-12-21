@@ -346,7 +346,7 @@ export default function ExpenseTemplates() {
                     </Select>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-lg border p-2">
+                  <div className="flex items-center justify-between rounded-2xl border p-2">
                     <div>
                       <Label className="text-xs font-medium">Template Ativo</Label>
                       <p className="text-[10px] text-muted-foreground">Gerar despesas automaticamente</p>

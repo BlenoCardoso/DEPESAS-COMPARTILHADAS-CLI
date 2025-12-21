@@ -361,7 +361,7 @@ export default function GroupBalances() {
                     {settlementsQuery.data.map((settlement: any) => (
                       <div
                         key={settlement.id}
-                        className="flex items-center justify-between p-2 rounded-lg border"
+                        className="flex items-center justify-between p-2 rounded-2xl border"
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">

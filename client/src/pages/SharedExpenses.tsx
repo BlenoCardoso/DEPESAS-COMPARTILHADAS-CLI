@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,17 +12,22 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SplitCalculator } from "@/components/SplitCalculator";
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import BodyPortal from "@/components/BodyPortal";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { uploadExpenseAttachment, validateImageFile } from "@/lib/storage";
+import { deleteExpenseAttachment, uploadExpenseAttachment, validateImageFile } from "@/lib/storage";
 import { realsToCents, centsToRealsInput } from "@/lib/currency";
 import {
   CheckCircle2,
-  Loader2,
   MoreVertical,
   Pencil,
   Plus,
   Trash2,
   Paperclip,
+  Clock,
+  ArrowUpDown,
+  Check,
   X,
   Image as ImageIcon,
   Search,
@@ -39,6 +45,56 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { useLocation } from "wouter";
 type SplitMode = "equal" | "fixed" | "percentage" | "proportional" | "single";
 type CustomSplit = { userId: string; value: number };
+
+function ExpenseListSkeleton() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <Card key={idx} className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3 rounded-xl" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-3 w-20 rounded-full" />
+                  <Skeleton className="h-3 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right space-y-1">
+                  <Skeleton className="h-4 w-16 rounded-xl" />
+                  <Skeleton className="h-3 w-10 rounded-xl" />
+                </div>
+                <Skeleton className="h-9 w-9 rounded-2xl" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ExpenseDetailSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 10 }).map((_, idx) => (
+          <div key={idx} className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
+            <Skeleton className="h-3 w-16 rounded-xl" />
+            <Skeleton className="h-3 w-20 rounded-xl" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-24 rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
+        <Skeleton className="h-10 w-full rounded-2xl" />
+      </div>
+    </div>
+  );
+}
 
 type Panel =
   | null
@@ -62,7 +118,10 @@ export default function SharedExpenses() {
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const groupId = currentGroup?.id ?? null;
   const [, navigate] = useLocation();
+  const isMobile = useIsMobile();
   const [panel, setPanel] = useState<Panel>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsExpense, setActionsExpense] = useState<any | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // Em reais (ex: "25,99" ou "25.99")
   const [category, setCategory] = useState("");
@@ -74,18 +133,19 @@ export default function SharedExpenses() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentRemoved, setAttachmentRemoved] = useState(false);
   // filtros
   const [filterText, setFilterText] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   // edição
   const [editing, setEditing] = useState<any | null>(null);
   // detalhes
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailAllowMemberEdits, setDetailAllowMemberEdits] = useState(false);
-  const isMobile = useIsMobile();
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const d = new Date();
@@ -154,6 +214,15 @@ export default function SharedExpenses() {
     { groupId: groupId! },
     { enabled: !!groupId && isAuthenticated }
   );
+
+  const markSplitPaidMutation = trpc.sharedExpenses.markSplitPaid.useMutation({
+    onSuccess: () => {
+      toast.success("Cota marcada como quitada");
+      detailQuery.refetch();
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const templatesQuery = trpc.expenseTemplates.list.useQuery(
     { groupId: groupId! },
@@ -231,7 +300,7 @@ export default function SharedExpenses() {
 
   const inviteMutation = trpc.invitations.create.useMutation({
     onSuccess: () => toast.success("Convite enviado"),
-    onError: (e) => toast.error(e.message),
+    onError: () => toast.error("Não foi possível enviar o convite"),
   });
 
   const updateFinancialMutation = trpc.groupMembers.updateFinancialProfile.useMutation({
@@ -290,6 +359,7 @@ export default function SharedExpenses() {
     }
 
     setAttachmentFile(file);
+    setAttachmentRemoved(false);
     
     // Criar preview
     const reader = new FileReader();
@@ -302,6 +372,7 @@ export default function SharedExpenses() {
   const handleRemoveAttachment = () => {
     setAttachmentFile(null);
     setAttachmentPreview(null);
+    setAttachmentRemoved(panel === "edit");
   };
 
   const handleCreate = async () => {
@@ -348,10 +419,18 @@ export default function SharedExpenses() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Remover despesa?")) {
-      deleteMutation.mutate({ id });
-    }
+  const handleDelete = (id: string, attachmentUrl?: string | null) => {
+    if (!confirm("Remover despesa?")) return;
+    deleteMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          if (attachmentUrl) {
+            void deleteExpenseAttachment(attachmentUrl);
+          }
+        },
+      }
+    );
   };
 
   const startEdit = (row: any) => {
@@ -361,12 +440,16 @@ export default function SharedExpenses() {
     setCategory(row.expense.category || "");
     setDate(new Date(row.expense.date).toISOString().substring(0,10));
     setAllowMemberEdits(Boolean(row.expense.allowMemberEdits));
+    setAttachmentFile(null);
+    setAttachmentRemoved(false);
+    setAttachmentPreview(row.expense.attachmentUrl || null);
     setPanel("edit");
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!editing) return;
     const amt = realsToCents(amount);
+    const oldAttachmentUrl: string | null | undefined = editing?.expense?.attachmentUrl;
     const payload: any = {
       id: editing.expense.id,
       title: title || undefined,
@@ -377,7 +460,41 @@ export default function SharedExpenses() {
     if (editing.expense.createdBy === user?.id) {
       payload.allowMemberEdits = allowMemberEdits;
     }
-    updateMutation.mutate(payload);
+
+    try {
+      // Remove comprovante existente
+      if (attachmentRemoved) {
+        payload.attachmentUrl = null;
+        await updateMutation.mutateAsync(payload);
+        if (oldAttachmentUrl) {
+          void deleteExpenseAttachment(oldAttachmentUrl);
+        }
+        setAttachmentRemoved(false);
+        return;
+      }
+
+      // Substitui / adiciona comprovante
+      if (attachmentFile && groupId) {
+        setUploadingAttachment(true);
+        const newUrl = await uploadExpenseAttachment(groupId, editing.expense.id, attachmentFile, user?.id || "");
+        payload.attachmentUrl = newUrl;
+        try {
+          await updateMutation.mutateAsync(payload);
+        } catch (e) {
+          // Evita órfão caso o update falhe
+          void deleteExpenseAttachment(newUrl);
+          throw e;
+        }
+        if (oldAttachmentUrl && oldAttachmentUrl !== newUrl) {
+          void deleteExpenseAttachment(oldAttachmentUrl);
+        }
+        return;
+      }
+
+      await updateMutation.mutateAsync(payload);
+    } finally {
+      setUploadingAttachment(false);
+    }
   };
 
   const openDetail = (row: any) => {
@@ -415,7 +532,15 @@ export default function SharedExpenses() {
     }
   }, [detailQuery.data]);
 
-  const expensesList = filteredExpenses ?? [];
+  const expensesList = useMemo(() => {
+    const list = (filteredExpenses ?? []).slice();
+    list.sort((a, b) => {
+      const at = new Date(a.expense.date).getTime();
+      const bt = new Date(b.expense.date).getTime();
+      return sortOrder === "asc" ? at - bt : bt - at;
+    });
+    return list;
+  }, [filteredExpenses, sortOrder]);
   const totalAmount = expensesList.reduce((sum, item) => sum + (item.expense.amount || 0), 0);
   const pendingCount = expensesList.filter((item) => item.expense.status === "pending").length;
 
@@ -439,8 +564,69 @@ export default function SharedExpenses() {
   const [templateFrequency, setTemplateFrequency] = useState<"weekly" | "monthly" | "yearly">("monthly");
   const [templateNextDue, setTemplateNextDue] = useState<string>(() => new Date().toISOString().substring(0, 10));
 
+  const getInitials = (name?: string | null, email?: string | null) => {
+    const base = (name || "").trim() || (email || "").split("@")[0] || "";
+    const parts = base.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : (parts[0]?.[1] ?? "");
+    return `${first}${last}`.toUpperCase();
+  };
+
+  const closeDetail = () => {
+    setPanel(null);
+    setDetailId(null);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setTitle("");
+    setAmount("");
+    setCategory("");
+    setDate(new Date().toISOString().substring(0, 10));
+    setAllowMemberEdits(uiSettings.defaultAllowMemberEdits);
+    setSplitMode(uiSettings.defaultSplitMode);
+    setCustomSplits([]);
+    setPaidBy("");
+    setAttachmentFile(null);
+    setAttachmentPreview(null);
+    setPanel("create");
+  };
+
   return (
     <div className="relative space-y-3 sm:space-y-4 animate-fade-in">
+      {isMobile ? (
+        <BodyPortal>
+          <Button
+            className="fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
+            style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
+            onClick={openCreate}
+            aria-label="Adicionar despesa compartilhada"
+            disabled={!groupId}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+        </BodyPortal>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
+        <ToggleGroup type="single" value="shared" className="w-full" variant="outline">
+          <ToggleGroupItem
+            value="shared"
+            className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
+          >
+            Compartilhadas
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="personal"
+            className="flex-1 rounded-xl"
+            onClick={() => navigate("/personal-expenses")}
+          >
+            Pessoais
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
       {/* Topo limpo */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -470,9 +656,28 @@ export default function SharedExpenses() {
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" onClick={() => setPanel("filters")} aria-label="Buscar">
-            <Search className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" aria-label="Ordenar">
+                <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setSortOrder("desc")}>
+                <span className="flex items-center gap-2">
+                  {sortOrder === "desc" ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+                  Mais recentes
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder("asc")}>
+                <span className="flex items-center gap-2">
+                  {sortOrder === "asc" ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+                  Mais antigas
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" onClick={() => setPanel("filters")} aria-label="Filtros">
             <SlidersHorizontal className="h-4 w-4" />
           </Button>
@@ -506,23 +711,6 @@ export default function SharedExpenses() {
 
       {/* Chips compactos */}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" className="rounded-full gap-2" disabled={!groupId} onClick={() => {
-          setEditing(null);
-          setTitle("");
-          setAmount("");
-          setCategory("");
-          setDate(new Date().toISOString().substring(0, 10));
-          setAllowMemberEdits(uiSettings.defaultAllowMemberEdits);
-          setSplitMode(uiSettings.defaultSplitMode);
-          setCustomSplits([]);
-          setPaidBy("");
-          setAttachmentFile(null);
-          setAttachmentPreview(null);
-          setPanel("create");
-        }}>
-          <Plus className="h-4 w-4" /> + Despesa
-        </Button>
-
         {(uiSettings.mode === "advanced" || !isMobile) && (
           <Button size="sm" variant="outline" className="rounded-full gap-2" disabled={!groupId} onClick={() => setPanel("recurring")}> 
             <Repeat className="h-4 w-4" /> Recorrentes
@@ -540,15 +728,15 @@ export default function SharedExpenses() {
 
       {/* Lista (o foco) */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-10"><Loader2 className="h-7 w-7 animate-spin" /></div>
+        <ExpenseListSkeleton />
       ) : expensesList.length === 0 ? (
-        <Card className="rounded-3xl border border-border/60 bg-card/80">
-          <CardContent className="p-6">
+        <Card className="rounded-2xl border border-border/60 bg-card/80">
+          <CardContent className="p-4">
             <EmptyState
               title="Nenhuma despesa neste mês"
               description="Use o botão + para adicionar a primeira despesa do período."
               cta={
-                <Button onClick={() => setPanel("create")} disabled={!groupId} className="gap-2">
+                <Button onClick={openCreate} disabled={!groupId} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Adicionar despesa
                 </Button>
@@ -558,87 +746,172 @@ export default function SharedExpenses() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {expensesList.map((e) => {
+          {expensesList.map((e, idx) => {
             const isOwner = e.expense.createdBy === user?.id;
             const canEdit = isOwner || (!!e.expense.allowMemberEdits && !!user?.id);
-            return (
-              <Card key={e.expense.id} className="rounded-2xl border bg-card shadow-sm">
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openDetail(e)}>
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold">{e.expense.title}</p>
-                        {e.expense.attachmentUrl ? <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> : null}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">{new Date(e.expense.date).toLocaleDateString("pt-BR")}</span>
-                        {e.expense.category ? <span className="text-[11px] text-muted-foreground">{e.expense.category}</span> : null}
-                        <Badge variant={e.expense.status === "validated" ? "secondary" : "outline"} className="rounded-full text-[11px]">
-                          {e.expense.status === "validated" ? "Paga" : "Pendente"}
-                        </Badge>
-                      </div>
-                    </button>
+            const isPaid = e.expense.status === "validated";
 
-                    <div className="flex items-center gap-2">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{formatCents(e.expense.amount)}</p>
-                        <p className="text-[11px] text-muted-foreground">valor</p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" aria-label="Mais opções">
+            const dayKey = new Date(e.expense.date).toISOString().slice(0, 10);
+            const prev = idx > 0 ? expensesList[idx - 1] : null;
+            const prevDayKey = prev ? new Date(prev.expense.date).toISOString().slice(0, 10) : null;
+            const showDayHeader = dayKey !== prevDayKey;
+
+            return (
+              <div key={e.expense.id} className="space-y-2">
+                {showDayHeader ? (
+                  <div className="pt-2">
+                    <p className="px-1 text-xs font-semibold text-muted-foreground">
+                      {new Date(e.expense.date).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }).replace(".", "")}
+                    </p>
+                  </div>
+                ) : null}
+
+                <Card className="interactive-card rounded-2xl border bg-card shadow-sm">
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openDetail(e)}>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold">{e.expense.title}</p>
+                          {e.expense.attachmentUrl ? <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground">{new Date(e.expense.date).toLocaleDateString("pt-BR")}</span>
+                          {e.expense.category ? <span className="text-[11px] text-muted-foreground">{e.expense.category}</span> : null}
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full text-[11px] border ${
+                              isPaid
+                                ? "bg-success/15 text-success border-success/25"
+                                : "bg-warning/15 text-warning border-warning/25"
+                            }`}
+                          >
+                            {isPaid ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                            {isPaid ? "Paga" : "Pendente"}
+                          </Badge>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{formatCents(e.expense.amount)}</p>
+                          <p className="text-[11px] text-muted-foreground">valor</p>
+                        </div>
+                        {isMobile ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-2xl"
+                            aria-label="Mais opções"
+                            onClick={() => {
+                              setActionsExpense({ e, canEdit, isOwner });
+                              setActionsOpen(true);
+                            }}
+                          >
                             <MoreVertical className="h-4 w-4" />
                           </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          {canEdit && (
-                            <DropdownMenuItem onClick={() => startEdit(e)}>
-                              <span className="flex items-center gap-2"><Pencil className="h-4 w-4" /> Editar</span>
-                            </DropdownMenuItem>
-                          )}
-                          {e.expense.status === "pending" && (
-                            <DropdownMenuItem onClick={() => validateMutation.mutate({ id: e.expense.id })}>
-                              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Marcar paga</span>
-                            </DropdownMenuItem>
-                          )}
-                          {isOwner && (
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(e.expense.id)}>
-                              <span className="flex items-center gap-2"><Trash2 className="h-4 w-4" /> Excluir</span>
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" aria-label="Mais opções">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {canEdit && (
+                                <DropdownMenuItem onClick={() => startEdit(e)}>
+                                  <span className="flex items-center gap-2"><Pencil className="h-4 w-4" /> Editar</span>
+                                </DropdownMenuItem>
+                              )}
+                              {e.expense.status === "pending" && (
+                                <DropdownMenuItem onClick={() => validateMutation.mutate({ id: e.expense.id })}>
+                                  <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Marcar paga</span>
+                                </DropdownMenuItem>
+                              )}
+                              {isOwner && (
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(e.expense.id, e.expense.attachmentUrl)}>
+                                  <span className="flex items-center gap-2"><Trash2 className="h-4 w-4" /> Excluir</span>
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             );
           })}
         </div>
       )}
 
-      {/* FAB */}
-      <Button
-        className="fixed bottom-20 right-4 h-12 w-12 rounded-full p-0 shadow-sm"
-        onClick={() => {
-          setEditing(null);
-          setTitle("");
-          setAmount("");
-          setCategory("");
-          setDate(new Date().toISOString().substring(0, 10));
-          setAllowMemberEdits(uiSettings.defaultAllowMemberEdits);
-          setSplitMode(uiSettings.defaultSplitMode);
-          setCustomSplits([]);
-          setPaidBy("");
-          setAttachmentFile(null);
-          setAttachmentPreview(null);
-          setPanel("create");
-        }}
-        disabled={!groupId}
-        aria-label="Adicionar despesa"
-      >
-        <Plus className="h-5 w-5" />
-      </Button>
+      <Drawer open={actionsOpen} onOpenChange={setActionsOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Ações da despesa</DrawerTitle>
+            <DrawerDescription className="text-base">
+              {actionsExpense?.e?.expense?.title ? actionsExpense.e.expense.title : ""}
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="px-4 pb-2">
+            <div className="grid gap-2">
+              {actionsExpense?.canEdit ? (
+                <Button
+                  className="justify-start gap-2 rounded-2xl"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    if (!actionsExpense?.e) return;
+                    startEdit(actionsExpense.e);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar
+                </Button>
+              ) : null}
+
+              {actionsExpense?.e?.expense?.status === "pending" ? (
+                <Button
+                  variant="secondary"
+                  className="justify-start gap-2 rounded-2xl"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    const id = actionsExpense?.e?.expense?.id;
+                    if (!id) return;
+                    validateMutation.mutate({ id });
+                  }}
+                  disabled={validateMutation.isPending}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Marcar como paga
+                </Button>
+              ) : null}
+
+              {actionsExpense?.isOwner ? (
+                <Button
+                  variant="destructive"
+                  className="justify-start gap-2 rounded-2xl"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    const id = actionsExpense?.e?.expense?.id;
+                    if (!id) return;
+                    handleDelete(id, actionsExpense?.e?.expense?.attachmentUrl);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <Button variant="outline" className="rounded-2xl" onClick={() => setActionsOpen(false)}>
+              Fechar
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Drawer: Filtros/Busca */}
       <Drawer open={panel === "filters"} onOpenChange={(open) => setPanel(open ? "filters" : null)}>
@@ -713,7 +986,7 @@ export default function SharedExpenses() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Configurações</DrawerTitle>
-            <DrawerDescription>Modo simples para leigos, avançado para power users.</DrawerDescription>
+            <DrawerDescription>Preferências da lista.</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-3">
             <div className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
@@ -774,7 +1047,7 @@ export default function SharedExpenses() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Categorias</DrawerTitle>
-            <DrawerDescription>Crie e edite categorias sem sair da tela.</DrawerDescription>
+            <DrawerDescription>Crie e edite categorias.</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-3">
             <div className="grid grid-cols-3 gap-2">
@@ -802,7 +1075,7 @@ export default function SharedExpenses() {
                 <div key={c.id} className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{c.icon ? `${c.icon} ` : ""}{c.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{c.id}</p>
+                    <p className="text-xs text-muted-foreground truncate">Editar no lápis.</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -844,7 +1117,7 @@ export default function SharedExpenses() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Membros</DrawerTitle>
-            <DrawerDescription>Convites e renda (para divisão por renda).</DrawerDescription>
+            <DrawerDescription>Convites e renda.</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-4">
             <div className="space-y-2">
@@ -1015,12 +1288,12 @@ export default function SharedExpenses() {
           }
         }}
       >
-        <DrawerContent>
-          <DrawerHeader>
+        <DrawerContent className="min-h-0 overflow-hidden">
+          <DrawerHeader className="shrink-0">
             <DrawerTitle>{panel === "edit" ? "Editar despesa" : "Adicionar despesa"}</DrawerTitle>
             <DrawerDescription>{panel === "edit" ? "Atualize os campos e salve." : "Preencha o básico; o resto fica escondido."}</DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 pb-2 space-y-3">
+          <div className="px-4 pb-2 space-y-3 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="space-y-1.5">
               <Label className="text-xs">Valor (R$) *</Label>
               <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Ex: 25,99" inputMode="decimal" className="rounded-2xl" />
@@ -1121,6 +1394,16 @@ export default function SharedExpenses() {
                         <Button type="button" size="icon" variant="destructive" className="absolute top-2 right-2 h-8 w-8" onClick={handleRemoveAttachment}>
                           <X className="h-4 w-4" />
                         </Button>
+                        {panel === "edit" && !attachmentFile && !attachmentRemoved ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="absolute bottom-2 right-2 h-8 rounded-full"
+                            onClick={() => window.open(attachmentPreview, "_blank")}
+                          >
+                            Abrir
+                          </Button>
+                        ) : null}
                       </div>
                     ) : (
                       <div>
@@ -1139,11 +1422,11 @@ export default function SharedExpenses() {
               </AccordionItem>
             </Accordion>
           </div>
-          <DrawerFooter>
+          <DrawerFooter className="mt-0 shrink-0">
             <Button variant="outline" className="rounded-2xl" onClick={() => setPanel(null)}>Cancelar</Button>
             {panel === "edit" ? (
-              <Button className="rounded-2xl" onClick={handleUpdate} disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <Button className="rounded-2xl" onClick={handleUpdate} disabled={updateMutation.isPending || uploadingAttachment}>
+                {(updateMutation.isPending || uploadingAttachment) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Salvar
               </Button>
             ) : (
@@ -1161,86 +1444,227 @@ export default function SharedExpenses() {
         open={panel === "detail"}
         onOpenChange={(open) => {
           if (!open) {
-            setPanel(null);
-            setDetailId(null);
+            closeDetail();
           }
         }}
       >
         <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Detalhes</DrawerTitle>
-            <DrawerDescription>Valores, splits e comprovante.</DrawerDescription>
+          <DrawerHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <DrawerTitle>Detalhes</DrawerTitle>
+              </div>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" onClick={closeDetail} aria-label="Fechar">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </DrawerHeader>
           <div className="px-4 pb-2">
             {detailQuery.isLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              <ExpenseDetailSkeleton />
             ) : detailQuery.data ? (
-              <div className="space-y-4 text-sm">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex justify-between"><span>Título</span><span className="font-medium">{detailQuery.data.expense.title}</span></div>
-                  <div className="flex justify-between"><span>Valor</span><span className="font-medium">{formatCents(detailQuery.data.expense.amount)}</span></div>
-                  <div className="flex justify-between"><span>Categoria</span><span className="font-medium">{detailQuery.data.expense.category || "Sem"}</span></div>
-                  <div className="flex justify-between"><span>Data</span><span className="font-medium">{new Date(detailQuery.data.expense.date).toLocaleDateString("pt-BR")}</span></div>
-                  <div className="flex justify-between"><span>Status</span><span className="font-medium">{detailQuery.data.expense.status === "validated" ? "Paga" : "Pendente"}</span></div>
-                </div>
+              (() => {
+                const expense = detailQuery.data.expense as any;
+                const splits = (detailQuery.data.splits as any[]) || [];
+                const isOwner = expense.createdBy === user?.id;
+                const canEdit = isOwner || (!!expense.allowMemberEdits && !!user?.id);
+                const isPaid = expense.status === "validated";
 
-                {detailQuery.data.expense.attachmentUrl ? (
-                  <div className="space-y-2">
-                    <Label className="text-xs flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" /> Comprovante</Label>
-                    <div className="rounded-2xl border overflow-hidden">
-                      <img src={detailQuery.data.expense.attachmentUrl} alt="Comprovante" className="w-full max-h-72 object-contain bg-muted" />
-                    </div>
-                    <Button variant="outline" className="rounded-2xl" onClick={() => window.open(detailQuery.data.expense.attachmentUrl, "_blank")}>
-                      <ImageIcon className="h-4 w-4 mr-2" /> Abrir em tela cheia
-                    </Button>
-                  </div>
-                ) : null}
+                const payerUser = splits.find((s) => String(s?.split?.userId) === String(expense.paidBy))?.user;
+                const payerLabel = payerUser ? userLabel(payerUser, user || undefined) : "—";
 
-                <div className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
-                  <div>
-                    <p className="text-sm font-medium">Edição por membros</p>
-                    <p className="text-xs text-muted-foreground">Permite que outros editem.</p>
-                  </div>
-                  {detailQuery.data.expense.createdBy === user?.id ? (
-                    <Switch
-                      checked={detailAllowMemberEdits}
-                      disabled={permissionMutation.isPending}
-                      onCheckedChange={(next) => {
-                        const previous = detailAllowMemberEdits;
-                        setDetailAllowMemberEdits(next);
-                        if (!detailId) return;
-                        permissionMutation.mutate({ id: detailId, allowMemberEdits: next }, { onError: () => setDetailAllowMemberEdits(previous) });
-                      }}
-                    />
-                  ) : (
-                    <span className="text-xs font-semibold">{detailAllowMemberEdits ? "Liberada" : "Restrita"}</span>
-                  )}
-                </div>
+                return (
+                  <div className="space-y-4">
+                    <Card className="rounded-2xl border bg-card shadow-sm">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-semibold">{expense.title}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString("pt-BR")}</span>
+                              {expense.category ? <span className="text-xs text-muted-foreground">{expense.category}</span> : null}
+                              <Badge
+                                variant="outline"
+                                className={`rounded-full text-[11px] border ${
+                                  isPaid
+                                    ? "bg-success/15 text-success border-success/25"
+                                    : "bg-warning/15 text-warning border-warning/25"
+                                }`}
+                              >
+                                {isPaid ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                                {isPaid ? "Liquidada" : "Pendente"}
+                              </Badge>
+                            </div>
+                          </div>
 
-                <Card className="rounded-2xl">
-                  <CardContent className="p-3 space-y-2">
-                    <p className="text-sm font-semibold">Splits</p>
-                    {detailQuery.data.splits.map((s: any) => (
-                      <div key={s.split.id} className="flex justify-between text-xs">
-                        <span>{userLabel(s.user, user || undefined)}</span>
-                        <span className="font-medium">{formatCents(s.split.amount)}</span>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold leading-none">{formatCents(expense.amount)}</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">total</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                          {canEdit ? (
+                            <Button
+                              variant="outline"
+                              className="rounded-2xl justify-start gap-2"
+                              onClick={() => {
+                                startEdit({ expense });
+                                closeDetail();
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Editar
+                            </Button>
+                          ) : null}
+
+                          {!isPaid ? (
+                            <Button
+                              className="rounded-2xl justify-start gap-2"
+                              onClick={() => validateMutation.mutate({ id: expense.id })}
+                              disabled={validateMutation.isPending}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              Marcar paga
+                            </Button>
+                          ) : null}
+
+                          {isOwner ? (
+                            <Button
+                              variant="destructive"
+                              className="rounded-2xl justify-start gap-2"
+                              onClick={() => handleDelete(expense.id, expense.attachmentUrl)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Excluir
+                            </Button>
+                          ) : null}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border bg-card shadow-sm">
+                      <CardContent className="p-3">
+                        <p className="text-sm font-semibold">Pagador</p>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{payerLabel}</p>
+                            <p className="text-xs text-muted-foreground">Quem desembolsou</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{formatCents(expense.amount)}</p>
+                            <p className="text-[11px] text-muted-foreground">valor</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border bg-card shadow-sm">
+                      <CardContent className="p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">Divisão</p>
+                          <p className="text-xs text-muted-foreground">
+                            {isPaid
+                              ? "Quitado por todos"
+                              : `${splits.filter((s) => Boolean(s?.split?.paid)).length} de ${splits.length} quitadas`}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          {splits.map((s: any) => {
+                            const u = s.user;
+                            const paid = Boolean(s?.split?.paid) || isPaid;
+                            const label = userLabel(u, user || undefined);
+                            const canMarkThisSplit = !paid && (s?.split?.userId === user?.id || isOwner);
+                            return (
+                              <div key={s.split.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 p-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Avatar className="h-8 w-8">
+                                    {(u as any)?.avatarUrl ? <AvatarImage src={(u as any).avatarUrl} alt={label} /> : null}
+                                    <AvatarFallback className="text-[11px]">{getInitials(u?.name, u?.email)}</AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{label}</p>
+                                    <div className="flex items-center gap-1">
+                                      {paid ? (
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-success">
+                                          <CheckCircle2 className="h-3.5 w-3.5" /> Quitou
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-warning">
+                                          <Clock className="h-3.5 w-3.5" /> Deve
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <p className="text-sm font-semibold">{formatCents(s.split.amount)}</p>
+                                  <p className="text-[11px] text-muted-foreground">cota</p>
+                                  {canMarkThisSplit ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="mt-2 h-8 rounded-xl px-2"
+                                      onClick={() => markSplitPaidMutation.mutate({ splitId: s.split.id })}
+                                      disabled={markSplitPaidMutation.isPending}
+                                    >
+                                      <CheckCircle2 className="h-4 w-4 mr-1" />
+                                      Marcar quitado
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
+                      <div>
+                        <p className="text-sm font-medium">Edição por membros</p>
+                        <p className="text-xs text-muted-foreground">Permitir que outros editem.</p>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                      {isOwner ? (
+                        <Switch
+                          checked={detailAllowMemberEdits}
+                          disabled={permissionMutation.isPending}
+                          onCheckedChange={(next) => {
+                            const previous = detailAllowMemberEdits;
+                            setDetailAllowMemberEdits(next);
+                            if (!detailId) return;
+                            permissionMutation.mutate({ id: detailId, allowMemberEdits: next }, { onError: () => setDetailAllowMemberEdits(previous) });
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold">{detailAllowMemberEdits ? "Liberada" : "Restrita"}</span>
+                      )}
+                    </div>
 
-                {detailQuery.data.expense.status === "pending" ? (
-                  <Button className="rounded-2xl gap-2" onClick={() => validateMutation.mutate({ id: detailQuery.data.expense.id })}>
-                    <CheckCircle2 className="h-4 w-4" /> Marcar paga
-                  </Button>
-                ) : null}
-              </div>
+                    {expense.attachmentUrl ? (
+                      <Card className="rounded-2xl border bg-card shadow-sm">
+                        <CardContent className="p-3 space-y-2">
+                          <Label className="text-xs flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" /> Comprovante</Label>
+                          <div className="rounded-2xl border overflow-hidden">
+                            <img src={expense.attachmentUrl} alt="Comprovante" className="w-full max-h-72 object-contain bg-muted" />
+                          </div>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => window.open(expense.attachmentUrl, "_blank")}>
+                            <ImageIcon className="h-4 w-4 mr-2" /> Abrir
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-muted-foreground text-sm">Sem dados</p>
             )}
           </div>
           <DrawerFooter>
-            <Button className="rounded-2xl" onClick={() => setPanel(null)}>Fechar</Button>
+            <Button className="rounded-2xl" onClick={closeDetail}>Fechar</Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>

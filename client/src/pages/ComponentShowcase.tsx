@@ -189,14 +189,14 @@ export default function ComponentsShowcase() {
 
   // AI ChatBox demo state
   const [chatMessages, setChatMessages] = useState<Message[]>([
-    { role: "system", content: "You are a helpful assistant." },
+    { role: "system", content: "Você é um assistente útil." },
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   const handleDialogSubmit = () => {
     console.log("Dialog submitted with value:", dialogInput);
-    sonnerToast.success("Submitted successfully", {
-      description: `Input: ${dialogInput}`,
+    sonnerToast.success("Enviado", {
+      description: `Texto: ${dialogInput}`,
     });
     setDialogInput("");
     setDialogOpen(false);
@@ -219,7 +219,7 @@ export default function ComponentsShowcase() {
     setTimeout(() => {
       const aiResponse: Message = {
         role: "assistant",
-        content: `This is a **demo response**. In a real app, you would call a tRPC mutation here:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nYour message was: "${content}"`,
+        content: `Esta é uma **resposta de demo**. No app real, você chamaria uma mutation tRPC aqui:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nSua mensagem foi: "${content}"`,
       };
       setChatMessages([...newMessages, aiResponse]);
       setIsChatLoading(false);
@@ -1028,7 +1028,7 @@ export default function ComponentsShowcase() {
                       <DialogHeader>
                         <DialogTitle>Test Input</DialogTitle>
                         <DialogDescription>
-                          Enter some text below. Press Enter to submit (IME composition supported).
+                          Digite um texto. Pressione Enter para enviar (IME suportado).
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
@@ -1049,23 +1049,22 @@ export default function ComponentsShowcase() {
                           variant="outline"
                           onClick={() => setDialogOpen(false)}
                         >
-                          Cancel
+                          Cancelar
                         </Button>
-                        <Button onClick={handleDialogSubmit}>Submit</Button>
+                        <Button onClick={handleDialogSubmit}>Enviar</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
 
                   <Sheet>
                     <SheetTrigger asChild>
-                      <Button variant="outline">Open Sheet</Button>
+                      <Button variant="outline">Abrir painel</Button>
                     </SheetTrigger>
                     <SheetContent>
                       <SheetHeader>
-                        <SheetTitle>Edit profile</SheetTitle>
+                        <SheetTitle>Editar perfil</SheetTitle>
                         <SheetDescription>
-                          Make changes to your profile here. Click save when
-                          you're done.
+                          Ajuste seu perfil. Salve quando terminar.
                         </SheetDescription>
                       </SheetHeader>
                     </SheetContent>
@@ -1073,19 +1072,19 @@ export default function ComponentsShowcase() {
 
                   <Drawer>
                     <DrawerTrigger asChild>
-                      <Button variant="outline">Open Drawer</Button>
+                      <Button variant="outline">Abrir drawer</Button>
                     </DrawerTrigger>
                     <DrawerContent>
                       <DrawerHeader>
-                        <DrawerTitle>Are you absolutely sure?</DrawerTitle>
+                        <DrawerTitle>Tem certeza?</DrawerTitle>
                         <DrawerDescription>
-                          This action cannot be undone.
+                          Esta ação não pode ser desfeita.
                         </DrawerDescription>
                       </DrawerHeader>
                       <DrawerFooter>
-                        <Button>Submit</Button>
+                        <Button>Confirmar</Button>
                         <DrawerClose asChild>
-                          <Button variant="outline">Cancel</Button>
+                          <Button variant="outline">Cancelar</Button>
                         </DrawerClose>
                       </DrawerFooter>
                     </DrawerContent>
@@ -1093,13 +1092,13 @@ export default function ComponentsShowcase() {
 
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline">Open Popover</Button>
+                      <Button variant="outline">Abrir popover</Button>
                     </PopoverTrigger>
                     <PopoverContent>
                       <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Dimensions</h4>
+                        <h4 className="font-medium leading-none">Dimensões</h4>
                         <p className="text-sm text-muted-foreground">
-                          Set the dimensions for the layer.
+                          Defina as dimensões da camada.
                         </p>
                       </div>
                     </PopoverContent>
@@ -1107,10 +1106,10 @@ export default function ComponentsShowcase() {
 
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="outline">Hover me</Button>
+                      <Button variant="outline">Passe o mouse</Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Add to library</p>
+                      <p>Adicionar à biblioteca</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -1126,27 +1125,27 @@ export default function ComponentsShowcase() {
                 <div className="flex flex-wrap gap-4">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline">Dropdown Menu</Button>
+                      <Button variant="outline">Menu</Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                      <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem>Profile</DropdownMenuItem>
-                      <DropdownMenuItem>Billing</DropdownMenuItem>
-                      <DropdownMenuItem>Team</DropdownMenuItem>
-                      <DropdownMenuItem>Subscription</DropdownMenuItem>
+                      <DropdownMenuItem>Perfil</DropdownMenuItem>
+                      <DropdownMenuItem>Cobrança</DropdownMenuItem>
+                      <DropdownMenuItem>Equipe</DropdownMenuItem>
+                      <DropdownMenuItem>Assinatura</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
 
                   <ContextMenu>
                     <ContextMenuTrigger asChild>
-                      <Button variant="outline">Right Click Me</Button>
+                      <Button variant="outline">Clique com o direito</Button>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
-                      <ContextMenuItem>Profile</ContextMenuItem>
-                      <ContextMenuItem>Billing</ContextMenuItem>
-                      <ContextMenuItem>Team</ContextMenuItem>
-                      <ContextMenuItem>Subscription</ContextMenuItem>
+                      <ContextMenuItem>Perfil</ContextMenuItem>
+                      <ContextMenuItem>Cobrança</ContextMenuItem>
+                      <ContextMenuItem>Equipe</ContextMenuItem>
+                      <ContextMenuItem>Assinatura</ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
 

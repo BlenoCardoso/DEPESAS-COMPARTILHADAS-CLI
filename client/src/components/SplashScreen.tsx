@@ -7,13 +7,13 @@ const OrbitGlyph = () => (
     viewBox="0 0 72 72"
     role="img"
     aria-hidden="true"
-    className="drop-shadow-xl"
+    className="drop-shadow-sm"
   >
     <defs>
       <linearGradient id="orbitGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#7C5DFA" />
-        <stop offset="50%" stopColor="#FF8F70" />
-        <stop offset="100%" stopColor="#42C5C0" />
+        <stop offset="0%" stopColor="var(--primary)" />
+        <stop offset="50%" stopColor="var(--accent)" />
+        <stop offset="100%" stopColor="var(--primary)" />
       </linearGradient>
     </defs>
     <rect
@@ -37,7 +37,7 @@ const OrbitGlyph = () => (
       strokeWidth="5"
       strokeLinecap="round"
     />
-    <circle cx="38" cy="43" r="4" fill="#ffffff" />
+    <circle cx="38" cy="43" r="4" fill="hsl(var(--background))" />
   </svg>
 );
 
@@ -52,16 +52,16 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-[radial-gradient(circle_at_top,_rgba(124,93,250,0.18),_transparent_55%),_radial-gradient(circle_at_bottom,_rgba(66,197,192,0.18),_transparent_55%),_var(--background)] text-foreground">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-background text-foreground">
       <div className="page-transition flex flex-col items-center gap-6 px-8 text-center">
-        <div className="relative flex items-center justify-center rounded-[32px] bg-card/80 p-6 shadow-2xl backdrop-blur-xl">
+        <div className="relative flex items-center justify-center rounded-2xl bg-card/80 p-5 shadow-md backdrop-blur-xl">
           <OrbitGlyph />
-          <div className="absolute -right-2 -top-2 h-8 w-8 rounded-full border border-white/40 bg-white/70 text-lg font-semibold text-primary shadow-lg">
+          <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/85 text-lg font-semibold text-primary shadow-sm">
             +
           </div>
         </div>
         <div className="space-y-2">
-          <p className="text-gradient text-3xl font-semibold tracking-tight">Compartilha</p>
+          <p className="text-primary text-3xl font-semibold tracking-tight">Compartilha</p>
           <p className="text-sm text-muted-foreground max-w-xs">
             Controle coletivo com cara de aplicativo nativo.
           </p>

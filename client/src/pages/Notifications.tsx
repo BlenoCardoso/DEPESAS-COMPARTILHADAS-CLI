@@ -256,12 +256,12 @@ export default function Notifications() {
             <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
               <span className="flex flex-col items-start">
                 <span className="text-sm font-semibold">Resumo</span>
-                <span className="text-xs text-muted-foreground">Status e sincronização (Firebase)</span>
+                <span className="text-xs text-muted-foreground">Status e sincronização</span>
               </span>
             </AccordionTrigger>
             <AccordionContent className="pt-3">
               <div className="rounded-2xl border border-border/60 bg-card/60 p-3 text-xs text-muted-foreground">
-                Receba alertas em tempo real. Use os filtros acima para reduzir a lista e o botão de check para limpar as pendências.
+                Receba alertas automaticamente. Use os filtros acima para reduzir a lista e o botão de check para limpar as pendências.
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -286,15 +286,15 @@ export default function Notifications() {
           ))}
         </div>
       ) : isEmptyState ? (
-        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+        <PageContainer className="rounded-2xl border border-border/60 bg-card/80">
           <EmptyState
-            title="Nenhuma notificacao"
+            title="Nenhuma notificação"
             description={
               showUnreadOnly
-                ? "Voce esta em dia, sem pendencias a revisar."
-                : "Ainda nao foram gerados eventos para este usuario."
+                ? "Você está em dia, sem pendências a revisar."
+                : "Ainda não foram gerados eventos para este usuário."
             }
-            hint="Alertas sao enviados por push, e-mail e app"
+            hint="Alertas chegam por push, e-mail e no app"
             icon={<NotificationEmptyIllustration />}
           />
         </PageContainer>

@@ -19,8 +19,8 @@ export default function Settings() {
         <p className="text-sm text-muted-foreground">Deixe o app do seu jeito, sem poluir a tela.</p>
       </PageContainer>
 
-      <PageContainer className="glass-panel space-y-3 rounded-3xl border border-border/70 bg-card/70">
-        <Card className="rounded-3xl border border-border/60 bg-card/80">
+      <PageContainer className="glass-panel space-y-3 rounded-2xl border border-border/70 bg-card/70">
+        <Card className="rounded-2xl border border-border/60 bg-card/80">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Aparência</CardTitle>
             <CardDescription>Escolha um visual mais claro ou escuro.</CardDescription>
@@ -40,7 +40,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border border-border/60 bg-card/80">
+        <Card className="rounded-2xl border border-border/60 bg-card/80">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Layout</CardTitle>
             <CardDescription>Deixa a navegação mais parecida com app.</CardDescription>

@@ -9,7 +9,7 @@ import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { CreditCard, PieChart, Plus, Users, Wallet, Bell } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export default function Home() {
   const { user, loading, isAuthenticated, loginWithGoogle } = useAuth();
@@ -50,6 +50,26 @@ export default function Home() {
   });
 
   const firstName = user?.name?.split(" ")[0] ?? "";
+
+  const recentPersonalExpenses = useMemo(() => {
+    const list = Array.isArray(personalExpenses) ? [...personalExpenses] : [];
+    list.sort((a: any, b: any) => {
+      const at = a?.date ? new Date(a.date).getTime() : 0;
+      const bt = b?.date ? new Date(b.date).getTime() : 0;
+      return bt - at;
+    });
+    return list.slice(0, 5);
+  }, [personalExpenses]);
+
+  const recentNotifications = useMemo(() => {
+    const list = Array.isArray(notifications) ? [...notifications] : [];
+    list.sort((a: any, b: any) => {
+      const at = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bt = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bt - at;
+    });
+    return list.slice(0, 5);
+  }, [notifications]);
   
   // Loading state unificado
   const isLoadingData = groupsLoading || personalLoading || sharedLoading;
@@ -67,12 +87,12 @@ export default function Home() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
         <div className="max-w-md space-y-6">
           <div className="space-y-2">
-            <div className="mx-auto h-16 w-16 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
-              <CreditCard className="h-8 w-8 text-white" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-border">
+              <CreditCard className="h-8 w-8" />
             </div>
-            <h1 className="text-2xl font-bold text-gradient sm:text-4xl">{APP_TITLE}</h1>
-            <p className="text-sm text-muted-foreground sm:text-lg">
-              Gerencie suas despesas compartilhadas e pessoais de forma simples e eficiente
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{APP_TITLE}</h1>
+            <p className="text-base text-muted-foreground sm:text-lg">
+              Controle despesas compartilhadas e pessoais.
             </p>
           </div>
 
@@ -81,32 +101,32 @@ export default function Home() {
               <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
                 <span className="flex flex-col items-start">
                   <span className="text-sm font-semibold">Ver recursos</span>
-                  <span className="text-xs text-muted-foreground">Toque para expandir</span>
+                  <span className="text-xs text-muted-foreground">Opcional</span>
                 </span>
               </AccordionTrigger>
               <AccordionContent className="pt-3">
                 <div className="grid grid-cols-2 gap-4 py-2">
-                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-primary/10">
+                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
                     <Users className="h-8 w-8 text-primary" />
                     <span className="text-sm font-medium">Grupos</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary/10">
+                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
                     <CreditCard className="h-8 w-8 text-secondary" />
                     <span className="text-sm font-medium">Despesas</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/10">
+                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
                     <Wallet className="h-8 w-8 text-accent" />
                     <span className="text-sm font-medium">Pessoal</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-info/10">
+                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
                     <PieChart className="h-8 w-8 text-info" />
                     <span className="text-sm font-medium">Relatórios</span>
                   </div>
                 </div>
 
                 <div className="text-center text-xs text-muted-foreground space-y-1">
-                  <p>Login seguro com Firebase Authentication</p>
-                  <p>Sincronização em tempo real</p>
+                  <p>Login seguro</p>
+                  <p>Atualização automática</p>
                   <p>Funciona offline</p>
                 </div>
               </AccordionContent>
@@ -115,7 +135,7 @@ export default function Home() {
 
           <Button
             size="lg"
-            className="w-full gradient-primary text-white font-semibold"
+            className="w-full font-semibold"
             onClick={loginWithGoogle}
             disabled={loading}
           >
@@ -155,17 +175,20 @@ export default function Home() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <Card className="rounded-2xl border bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
-        <CardContent className="flex items-center justify-between gap-3 p-3">
-          <div className="space-y-1">
-            <p className="text-sm/5 opacity-95">Olá, {firstName}!</p>
-            <p className="text-sm font-semibold">Acompanhe tudo em tempo real.</p>
-          </div>
-          <div className="rounded-2xl bg-white/15 p-2">
-            <CreditCard className="h-5 w-5" />
-          </div>
-        </CardContent>
-      </Card>
+      <Link href="/reports">
+        <Card className="interactive-card cursor-pointer rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="flex items-center justify-between gap-3 p-3">
+            <div className="space-y-1">
+              <p className="text-sm/5 text-muted-foreground">Olá, {firstName}!</p>
+              <p className="text-sm font-semibold">Acompanhe tudo em um só lugar.</p>
+              <p className="text-[11px] text-muted-foreground">Ver relatórios</p>
+            </div>
+            <div className="rounded-2xl bg-primary/10 p-2 text-primary">
+              <CreditCard className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup
@@ -190,11 +213,11 @@ export default function Home() {
             <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
               <span className="flex flex-col items-start">
                 <span className="text-sm font-semibold">Resumo</span>
-                <span className="text-xs text-muted-foreground">Toque para expandir</span>
+                <span className="text-xs text-muted-foreground">Opcional</span>
               </span>
             </AccordionTrigger>
             <AccordionContent className="pt-3">
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Card Grupos com skeleton */}
                 <Link href="/groups">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
@@ -261,7 +284,7 @@ export default function Home() {
                               <CreditCard className="h-4 w-4" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold">Compart.</p>
+                              <p className="text-sm font-semibold">Compartilhadas</p>
                               <p className="text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
                             </div>
                           </div>
@@ -353,6 +376,85 @@ export default function Home() {
                   </Card>
                 </Link>
               </div>
+
+              <Accordion type="single" collapsible>
+                <AccordionItem value="details" className="border-none">
+                  <AccordionTrigger className="mt-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                    <span className="flex flex-col items-start">
+                      <span className="text-sm font-semibold">Detalhes</span>
+                      <span className="text-xs text-muted-foreground">Últimos lançamentos e alertas</span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Card className="rounded-2xl border border-border/60 bg-card/60">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Despesas pessoais</CardTitle>
+                          <CardDescription className="text-xs">Últimas {recentPersonalExpenses.length} • {formatCents(personalTotal)}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {personalLoading ? (
+                            <p className="text-xs text-muted-foreground">Carregando…</p>
+                          ) : recentPersonalExpenses.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Sem lançamentos recentes.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {recentPersonalExpenses.map((item: any) => (
+                                <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{item.title}</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                                      {item.category ? ` • ${item.category}` : ""}
+                                    </p>
+                                  </div>
+                                  <p className="shrink-0 text-sm font-semibold">{formatCents(item.amount)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
+                            <Link href="/personal-expenses">Ver todas</Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="rounded-2xl border border-border/60 bg-card/60">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Notificações</CardTitle>
+                          <CardDescription className="text-xs">{unreadCount || 0} não lidas • {notificationsCount} no total</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {(unreadLoading || notificationsLoading) ? (
+                            <p className="text-xs text-muted-foreground">Carregando…</p>
+                          ) : recentNotifications.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nada por aqui.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {recentNotifications.map((n: any) => (
+                                <div key={n.id} className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="truncate text-sm font-medium">{n.title}</p>
+                                    {!n.read ? (
+                                      <span className="h-5 shrink-0 rounded-full bg-primary/15 px-2 text-[11px] font-medium text-primary">Nova</span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">{n.message}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
+                            <Link href="/notifications">Ver tudo</Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
@@ -376,7 +478,13 @@ export default function Home() {
                 <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
                   <Link href="/shared-expenses">
                     <CreditCard className="h-4 w-4" />
-                    Nova despesa
+                    Despesa compartilhada
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
+                  <Link href="/personal-expenses">
+                    <Wallet className="h-4 w-4" />
+                    Despesa pessoal
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">

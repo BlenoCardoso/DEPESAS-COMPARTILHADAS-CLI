@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Loader2, Trash2, UserMinus, MailPlus } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2, Trash2, UserMinus, MailPlus, ArrowLeftRight, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Link, useLocation } from "wouter";
@@ -29,10 +30,20 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
 
   const groupQuery = trpc.groups.getById.useQuery({ id: groupId }, { enabled: !!groupId });
   const membersQuery = trpc.groups.getMembers.useQuery({ groupId }, { enabled: !!groupId });
+  const statsQuery = trpc.groups.stats.useQuery({ groupId }, { enabled: !!groupId });
+
+  const getInitials = (name?: string | null, email?: string | null) => {
+    const base = (name || "").trim() || (email || "").split("@")[0] || "";
+    const parts = base.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : (parts[0]?.[1] ?? "");
+    return `${first}${last}`.toUpperCase();
+  };
 
   const updateMutation = trpc.groups.update.useMutation({
     onSuccess: () => { toast.success("Grupo atualizado"); setEditingOpen(false); groupQuery.refetch(); },
-    onError: e => toast.error(e.message),
+    onError: () => toast.error("Não foi possível salvar as alterações"),
   });
   const removeMemberMutation = trpc.groups.removeMember.useMutation({
     onSuccess: () => {
@@ -40,7 +51,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
       membersQuery.refetch();
       utils.groups.list.invalidate();
     },
-    onError: e => toast.error(e.message),
+    onError: () => toast.error("Não foi possível remover o membro"),
   });
   const leaveGroupMutation = trpc.groups.removeMember.useMutation({
     onSuccess: () => {
@@ -49,11 +60,11 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
       utils.groups.list.invalidate();
       setLocation("/groups");
     },
-    onError: e => toast.error(e.message),
+    onError: () => toast.error("Não foi possível sair do grupo"),
   });
   const inviteMutation = trpc.invitations.create.useMutation({
     onSuccess: () => { toast.success("Convite enviado"); setInviteOpen(false); setInviteEmail(""); },
-    onError: e => toast.error(e.message),
+    onError: () => toast.error("Não foi possível enviar o convite"),
   });
 
   useEffect(() => {
@@ -64,6 +75,16 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
   }, [groupQuery.data]);
 
   const canEdit = groupQuery.data && groupQuery.data.ownerId === user?.id;
+
+  const handleOpenSharedExpenses = () => {
+    setCurrentGroupId(groupId);
+    setLocation("/shared-expenses");
+  };
+
+  const handleOpenBalances = () => {
+    setCurrentGroupId(groupId);
+    setLocation("/group-balances");
+  };
 
   const handleSave = () => {
     updateMutation.mutate({ id: groupId, name: name || undefined, description: description || undefined });
@@ -78,7 +99,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
     leaveGroupMutation.mutate({ groupId, userId: user.id });
   };
   const handleInvite = () => {
-    if (!inviteEmail.trim()) { toast.error("Email obrigatório"); return; }
+    if (!inviteEmail.trim()) { toast.error("E-mail obrigatório"); return; }
     inviteMutation.mutate({ groupId, invitedEmail: inviteEmail.trim() });
   };
 
@@ -97,9 +118,17 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">{groupQuery.data.name}</h1>
-          <p className="text-muted-foreground">Detalhes e membros do grupo</p>
+          <p className="text-muted-foreground">Detalhes do grupo</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleOpenSharedExpenses} className="gap-2">
+            <CreditCard className="h-4 w-4" />
+            Despesas
+          </Button>
+          <Button variant="outline" onClick={handleOpenBalances} className="gap-2">
+            <ArrowLeftRight className="h-4 w-4" />
+            Saldos
+          </Button>
           {canEdit && <Button variant="outline" onClick={() => setInviteOpen(true)}><MailPlus className="h-4 w-4 mr-2" />Convidar</Button>}
           {canEdit && <Button onClick={() => setEditingOpen(true)}>Editar</Button>}
           {!canEdit && (
@@ -109,6 +138,25 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
           )}
           <Link href="/groups"><Button variant="ghost">Voltar</Button></Link>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Card className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Membros</p>
+            <p className="mt-1 text-2xl font-bold leading-none">
+              {typeof statsQuery.data?.membersCount === "number" ? statsQuery.data.membersCount : (membersQuery.data?.length ?? "—")}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Pendentes</p>
+            <p className="mt-1 text-2xl font-bold leading-none">
+              {typeof statsQuery.data?.pendingExpensesCount === "number" ? statsQuery.data.pendingExpensesCount : "—"}
+            </p>
+          </CardContent>
+        </Card>
       </div>
       <Card>
         <CardHeader>
@@ -125,14 +173,22 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <CardContent className="space-y-2">
           {membersQuery.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
             membersQuery.data && membersQuery.data.length > 0 ? membersQuery.data.map(m => (
-              <div key={m.member.id} className="flex justify-between items-center text-sm border rounded px-3 py-2">
-                <div className="flex flex-col">
-                  <span>{getUserLabel(m.user)}</span>
-                  <span className="text-muted-foreground text-xs">{translateMemberRole(m.member.role)}</span>
+              <div key={m.member.id} className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/50 px-3 py-2 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar className="h-9 w-9">
+                    {(m.user as any)?.avatarUrl ? <AvatarImage src={(m.user as any).avatarUrl} alt={getUserLabel(m.user)} /> : null}
+                    <AvatarFallback className="text-xs">{getInitials(m.user?.name, m.user?.email)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium">{getUserLabel(m.user)}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{translateMemberRole(m.member.role)}</span>
+                  </div>
                 </div>
-                {canEdit && m.user.id !== user?.id && (
-                  <Button variant="ghost" size="icon" onClick={() => handleRemove(m.user.id!)}><UserMinus className="h-4 w-4 text-destructive" /></Button>
-                )}
+                {canEdit && m.user.id !== user?.id ? (
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" onClick={() => handleRemove(m.user.id!)} aria-label="Remover membro">
+                    <UserMinus className="h-4 w-4 text-destructive" />
+                  </Button>
+                ) : null}
               </div>
             )) : <p className="text-muted-foreground text-sm">Sem membros</p>
           )}
@@ -144,7 +200,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar Grupo</DialogTitle>
-            <DialogDescription>Atualize nome e descrição do grupo</DialogDescription>
+            <DialogDescription>Atualize nome e descrição</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -168,11 +224,11 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Convidar Membro</DialogTitle>
-            <DialogDescription>Envie um convite por email para adicionar um novo membro</DialogDescription>
+            <DialogDescription>Convide por e-mail</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
+              <label className="text-sm font-medium">E-mail</label>
               <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="usuario@exemplo.com" />
             </div>
           </div>

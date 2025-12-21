@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/utils";
 import { Loader2, RefreshCcw, TrendingUp, Wallet, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 
 export default function Reports() {
   const { isAuthenticated } = useAuth();
@@ -17,6 +19,7 @@ export default function Reports() {
   const [endDate, setEndDate] = useState<string>("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [rangePreset, setRangePreset] = useState<"all" | "7d" | "30d" | "90d" | "custom">("all");
+  const [categoriesOpen, setCategoriesOpen] = useState(!isMobile);
 
   const toLocalDateInput = (date: Date) => {
     const y = date.getFullYear();
@@ -66,21 +69,21 @@ export default function Reports() {
           description: "Suas despesas",
           value: formatCents(summaryQuery.data.personalTotal),
           icon: Wallet,
-          gradient: "from-secondary/90 to-secondary",
+          tone: "secondary" as const,
         },
         {
           title: "Total Compartilhado",
           description: "Todos os grupos",
           value: formatCents(summaryQuery.data.sharedTotal),
           icon: Users,
-          gradient: "from-primary/90 to-primary/70",
+          tone: "primary" as const,
         },
         {
           title: "Total Geral",
           description: "Pessoal + grupo",
           value: formatCents(summaryQuery.data.grandTotal),
           icon: TrendingUp,
-          gradient: "from-accent/90 to-accent/70",
+          tone: "accent" as const,
         },
       ]
     : [];
@@ -89,18 +92,36 @@ export default function Reports() {
     if (!summaryQuery.data) return [];
     const total = summaryQuery.data.grandTotal || 0;
     return summaryQuery.data.categories.map((c, index) => {
-      const colors = ["from-primary/60", "from-secondary/60", "from-accent/60", "from-info/60", "from-success/60"];
-      const color = colors[index % colors.length];
+      const bars = ["bg-primary/40", "bg-secondary/40", "bg-accent/40", "bg-info/40", "bg-success/40"];
+      const barClass = bars[index % bars.length];
       const percent = total ? (c.total / total) * 100 : 0;
-      return { name: c.name, total: c.total, color, percent };
+      return { name: c.name, total: c.total, barClass, percent };
     });
   }, [summaryQuery.data]);
+
+  const hasAnyData = useMemo(() => {
+    if (!summaryQuery.data) return false;
+    if ((summaryQuery.data.grandTotal || 0) > 0) return true;
+    if ((summaryQuery.data.personalTotal || 0) > 0) return true;
+    if ((summaryQuery.data.sharedTotal || 0) > 0) return true;
+    return (summaryQuery.data.categories || []).some((c) => (c.total || 0) > 0);
+  }, [summaryQuery.data]);
+
+  const scrollToCategories = () => {
+    if (typeof window === "undefined") return;
+    setCategoriesOpen(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("reports-categories")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold sm:text-3xl">Relatórios</h1>
-        <p className="text-sm text-muted-foreground">Totais e categorias, sem poluição visual.</p>
+        <p className="text-base text-muted-foreground">Totais e categorias, sem poluição visual.</p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
@@ -191,6 +212,22 @@ export default function Reports() {
         </div>
       ) : summaryQuery.data ? (
         <>
+          {!hasAnyData ? (
+            <Card className="bg-card/80">
+              <CardContent className="p-4">
+                <EmptyState
+                  title="Ainda não há despesas neste período"
+                  description="Comece adicionando uma nova despesa para ver seus totais e categorias aqui."
+                  cta={
+                    <Button asChild className="gap-2">
+                      <Link href="/shared-expenses">Adicionar despesa</Link>
+                    </Button>
+                  }
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "summary"}>
             <AccordionItem value="summary" className="border-none">
               <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
@@ -205,26 +242,39 @@ export default function Reports() {
                 <div className="space-y-2">
                   {summaryCards.map((card) => {
                     const Icon = card.icon;
+
+                    const iconClass =
+                      card.tone === "primary"
+                        ? "bg-primary/10 text-primary"
+                        : card.tone === "secondary"
+                          ? "bg-secondary/10 text-secondary"
+                          : "bg-accent/10 text-accent";
+
                     return (
-                      <Card
+                      <button
                         key={card.title}
-                        className={`rounded-2xl border-0 text-white shadow-sm bg-gradient-to-br ${card.gradient}`}
+                        type="button"
+                        onClick={scrollToCategories}
+                        className="w-full text-left"
+                        aria-label={`Ver categorias de ${card.title}`}
                       >
-                        <CardContent className="p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white/90">{card.title}</p>
-                              <p className="text-[11px] text-white/70">{card.description}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-base font-semibold tracking-tight">{card.value}</p>
-                              <div className="rounded-xl bg-white/20 p-2 text-white">
-                                <Icon className="h-4 w-4" />
+                        <Card className="interactive-card rounded-2xl border border-border/60 bg-card shadow-sm">
+                          <CardContent className="p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold">{card.title}</p>
+                                <p className="text-[11px] text-muted-foreground">{card.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-base font-semibold tracking-tight">{card.value}</p>
+                                <div className={`rounded-xl p-2 ${iconClass}`}>
+                                  <Icon className="h-4 w-4" />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                          </CardContent>
+                        </Card>
+                      </button>
                     );
                   })}
                 </div>
@@ -232,12 +282,18 @@ export default function Reports() {
             </AccordionItem>
           </Accordion>
 
-          <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "categories"}>
+          <div id="reports-categories" />
+          <Accordion
+            type="single"
+            collapsible
+            value={categoriesOpen ? "categories" : undefined}
+            onValueChange={(v) => setCategoriesOpen(v === "categories")}
+          >
             <AccordionItem value="categories" className="border-none">
               <AccordionTrigger className="rounded-2xl border border-border/70 bg-card/60 px-4 py-3 hover:no-underline">
                 <span className="flex flex-col items-start">
                   <span className="text-sm font-semibold">Detalhar por categoria</span>
-                  <span className="text-xs text-muted-foreground">Toque para expandir</span>
+                  <span className="text-xs text-muted-foreground">Opcional</span>
                 </span>
               </AccordionTrigger>
               <AccordionContent className="pt-3">
@@ -252,7 +308,7 @@ export default function Reports() {
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-muted">
                           <div
-                            className={`h-full rounded-full bg-gradient-to-r ${row.color} to-transparent`}
+                            className={`h-full rounded-full ${row.barClass}`}
                             style={{ width: `${Math.min(100, row.percent)}%` }}
                           />
                         </div>

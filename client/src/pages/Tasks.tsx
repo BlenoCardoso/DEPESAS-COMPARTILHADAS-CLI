@@ -6,18 +6,48 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Circle, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/useMobile";
+import BodyPortal from "@/components/BodyPortal";
+
+function TasksListSkeleton() {
+  return (
+    <PageContainer className="space-y-2">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <Card key={idx} className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-start gap-3">
+              <Skeleton className="h-9 w-9 rounded-2xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3 rounded-xl" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-3 w-24 rounded-full" />
+                </div>
+              </div>
+              <Skeleton className="h-9 w-9 rounded-2xl" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </PageContainer>
+  );
+}
 
 export default function Tasks() {
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -25,6 +55,8 @@ export default function Tasks() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "done">("all");
   const [filterText, setFilterText] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsTask, setActionsTask] = useState<any | null>(null);
 
   const { data: tasks, isLoading, refetch } = trpc.tasks.list.useQuery(undefined, { enabled: isAuthenticated });
   const tasksList = Array.isArray(tasks) ? tasks : [];
@@ -81,8 +113,23 @@ export default function Tasks() {
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Tarefas com foco e clareza</h1>
-        <p className="text-sm text-muted-foreground">Organize o que precisa fazer para o grupo.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold sm:text-3xl">Tarefas</h1>
+            <p className="text-sm text-muted-foreground">Organize suas tarefas aqui.</p>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              "shrink-0 rounded-full text-[11px] border " +
+              (pendingCount > 0
+                ? "bg-warning/15 text-warning border-warning/25"
+                : "bg-success/15 text-success border-success/25")
+            }
+          >
+            Pendentes: {pendingCount}
+          </Badge>
+        </div>
       </div>
 
       <Accordion type="single" collapsible defaultValue={undefined}>
@@ -118,7 +165,7 @@ export default function Tasks() {
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto">
+              <Button className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto hidden sm:inline-flex">
                 <Plus className="h-4 w-4" />
                 + Nova tarefa
               </Button>
@@ -228,9 +275,7 @@ export default function Tasks() {
       </PageContainer>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+        <TasksListSkeleton />
       ) : visibleTasks.length === 0 ? (
         <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
           <EmptyState
@@ -252,20 +297,14 @@ export default function Tasks() {
               >
                 <CardContent className={"p-3 " + (completed ? "opacity-70" : "opacity-100")}>
                   <div className="flex items-start gap-3">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="interactive-tap h-9 w-9 rounded-2xl"
-                      onClick={() => handleToggle(t.id, completed)}
-                      disabled={toggleMutation.isPending}
-                      aria-label={completed ? "Reabrir" : "Concluir"}
-                    >
-                      {completed ? (
-                        <CheckCircle2 className="h-5 w-5 text-primary" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </Button>
+                    <div className="pt-1">
+                      <Checkbox
+                        checked={completed}
+                        onCheckedChange={() => handleToggle(t.id, completed)}
+                        disabled={toggleMutation.isPending}
+                        aria-label={completed ? "Marcar como pendente" : "Marcar como concluída"}
+                      />
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{t?.title}</p>
@@ -286,36 +325,51 @@ export default function Tasks() {
                       </div>
                     </div>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="interactive-tap h-9 w-9 rounded-2xl"
-                          aria-label="Mais opções"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => handleToggle(t.id, completed)} disabled={toggleMutation.isPending}>
-                          <span className="flex items-center gap-2">
-                            {completed ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                            {completed ? "Reabrir" : "Concluir"}
-                          </span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleDelete(t.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <span className="flex items-center gap-2">
-                            <Trash2 className="h-4 w-4" />
-                            Remover
-                          </span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isMobile ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="interactive-tap h-9 w-9 rounded-2xl"
+                        aria-label="Mais opções"
+                        onClick={() => {
+                          setActionsTask(t);
+                          setActionsOpen(true);
+                        }}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="interactive-tap h-9 w-9 rounded-2xl"
+                            aria-label="Mais opções"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleToggle(t.id, completed)} disabled={toggleMutation.isPending}>
+                            <span className="flex items-center gap-2">
+                              {completed ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                              {completed ? "Reabrir" : "Concluir"}
+                            </span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(t.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Trash2 className="h-4 w-4" />
+                              Remover
+                            </span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -323,6 +377,63 @@ export default function Tasks() {
           })}
         </PageContainer>
       )}
+
+      <Drawer open={actionsOpen} onOpenChange={setActionsOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Ações da tarefa</DrawerTitle>
+            <DrawerDescription className="text-base">{actionsTask?.title ? actionsTask.title : ""}</DrawerDescription>
+          </DrawerHeader>
+
+          <div className="px-4 pb-2">
+            <div className="grid gap-2">
+              <Button
+                className="justify-start gap-2 rounded-2xl"
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (!actionsTask?.id) return;
+                  handleToggle(actionsTask.id, Boolean(actionsTask?.completed));
+                }}
+                disabled={toggleMutation.isPending}
+              >
+                {actionsTask?.completed ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                {actionsTask?.completed ? "Reabrir" : "Concluir"}
+              </Button>
+
+              <Button
+                variant="destructive"
+                className="justify-start gap-2 rounded-2xl"
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (!actionsTask?.id) return;
+                  handleDelete(actionsTask.id);
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remover tarefa
+              </Button>
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <Button variant="outline" className="rounded-2xl" onClick={() => setActionsOpen(false)}>
+              Fechar
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <BodyPortal>
+        <Button
+          className="md:hidden fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
+          style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
+          onClick={() => setIsCreateOpen(true)}
+          aria-label="Criar nova tarefa"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      </BodyPortal>
     </div>
   );
 }

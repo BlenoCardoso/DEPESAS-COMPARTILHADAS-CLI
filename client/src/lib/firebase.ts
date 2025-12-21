@@ -12,7 +12,11 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-console.log("Firebase config carregado:", firebaseConfig);
+const isDev = import.meta.env.DEV;
+
+if (isDev) {
+  console.info("[Firebase] Config carregada");
+}
 
 // Validar configuração
 const requiredFields = [
@@ -22,7 +26,9 @@ const requiredFields = [
 
 for (const field of requiredFields) {
   if (!firebaseConfig[field as keyof typeof firebaseConfig]) {
-    console.warn(`Firebase: ${field} não configurado no .env`);
+    if (isDev) {
+      console.warn(`[Firebase] ${field} não configurado no .env`);
+    }
   }
 }
 

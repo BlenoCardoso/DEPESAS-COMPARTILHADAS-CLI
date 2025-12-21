@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
+import BodyPortal from "@/components/BodyPortal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowUpDown, Check, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents } from "@/lib/utils";
@@ -34,6 +35,7 @@ export default function PersonalExpenses() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   const { data: expenses, isLoading, refetch } = trpc.personalExpenses.list.useQuery(undefined, { enabled: isAuthenticated });
   const expensesList = (expenses as any[]) ?? [];
@@ -59,6 +61,36 @@ export default function PersonalExpenses() {
     return list;
   }, [expensesList, filterCategory, filterEnd, filterStart, filterText]);
 
+  const groupedVisibleExpenses = useMemo(() => {
+    const sorted = visibleExpenses.slice();
+    sorted.sort((a, b) => {
+      const at = a?.date ? new Date(a.date).getTime() : 0;
+      const bt = b?.date ? new Date(b.date).getTime() : 0;
+      return sortOrder === "asc" ? at - bt : bt - at;
+    });
+
+    const groups = new Map<string, any[]>();
+    for (const item of sorted) {
+      const d = item?.date ? new Date(item.date) : null;
+      const key = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "sem-data";
+      const arr = groups.get(key);
+      if (arr) arr.push(item);
+      else groups.set(key, [item]);
+    }
+
+    return Array.from(groups.entries()).map(([key, items]) => {
+      let label = "Sem data";
+      if (key !== "sem-data") {
+        const [yy, mm] = key.split("-").map((n) => parseInt(n, 10));
+        if (yy && mm) {
+          const d = new Date(yy, mm - 1, 1);
+          label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+        }
+      }
+      return { key, label, items };
+    });
+  }, [sortOrder, visibleExpenses]);
+
   const totalAmount = visibleExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
   const lastUpdate = (visibleExpenses[0] as any)?.updatedAt
     ? new Date((visibleExpenses[0] as any).updatedAt).toLocaleDateString("pt-BR")
@@ -72,7 +104,7 @@ export default function PersonalExpenses() {
     {
       label: "Total acumulado",
       value: formatCents(totalAmount),
-      helper: "Atualizado em tempo real",
+      helper: "Atualizado automaticamente",
     },
     {
       label: "Última atualização",
@@ -140,19 +172,13 @@ export default function PersonalExpenses() {
             className="flex-1 rounded-xl"
             onClick={() => navigate("/shared-expenses")}
           >
-            Compart.
+            Compartilhadas
           </ToggleGroupItem>
           <ToggleGroupItem
             value="personal"
             className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
           >
             Pessoais
-          </ToggleGroupItem>
-          <ToggleGroupItem value="pending" className="flex-1 rounded-xl" disabled>
-            Pendentes
-          </ToggleGroupItem>
-          <ToggleGroupItem value="paid" className="flex-1 rounded-xl" disabled>
-            Pagas
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -189,6 +215,16 @@ export default function PersonalExpenses() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      <BodyPortal>
+        <Button
+          className="md:hidden fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
+          style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
+          onClick={() => setIsCreateOpen(true)}
+          aria-label="Adicionar despesa pessoal"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      </BodyPortal>
 
       <PageContainer className="rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -218,6 +254,29 @@ export default function PersonalExpenses() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="interactive-tap w-full gap-2 rounded-2xl sm:w-auto" aria-label="Ordenar">
+                <ArrowUpDown className="h-4 w-4" />
+                Ordenar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setSortOrder("desc")}>
+                <span className="flex items-center gap-2">
+                  {sortOrder === "desc" ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+                  Mais recentes
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder("asc")}>
+                <span className="flex items-center gap-2">
+                  {sortOrder === "asc" ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+                  Mais antigas
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <Accordion type="single" collapsible value={filtersOpen ? "filters" : undefined} onValueChange={(v) => setFiltersOpen(v === "filters")}>
@@ -291,7 +350,7 @@ export default function PersonalExpenses() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
       ) : visibleExpenses.length === 0 ? (
-        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+        <PageContainer className="rounded-2xl border border-border/60 bg-card/80">
           <EmptyState
             title="Sem despesas registradas"
             description="Registre seus lançamentos pessoais." 
@@ -300,63 +359,71 @@ export default function PersonalExpenses() {
         </PageContainer>
       ) : (
         <PageContainer className="space-y-2">
-          {visibleExpenses.map((item: any) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 170, damping: 20 }}
-            >
-              <Card className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
-                <CardContent className="p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{item.title}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">
-                          {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
-                        </span>
-                        {item.category ? (
-                          <span className="text-[11px] text-muted-foreground">{item.category}</span>
-                        ) : null}
-                      </div>
-                    </div>
+          {groupedVisibleExpenses.map((g) => (
+            <div key={g.key} className="space-y-2">
+              <div className="pt-2">
+                <p className="px-1 text-xs font-semibold text-muted-foreground">{g.label}</p>
+              </div>
 
-                    <div className="flex items-center gap-1">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{formatCents(item.amount)}</p>
-                        <p className="text-[11px] text-muted-foreground">total</p>
+              {g.items.map((item: any) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 170, damping: 20 }}
+                >
+                  <Card className="interactive-card rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{item.title}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground">
+                              {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                            </span>
+                            {item.category ? (
+                              <span className="text-[11px] text-muted-foreground">{item.category}</span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{formatCents(item.amount)}</p>
+                            <p className="text-[11px] text-muted-foreground">total</p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="interactive-tap h-9 w-9 rounded-2xl" aria-label="Mais opções">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem onClick={() => startEdit(item)}>
+                                <span className="flex items-center gap-2">
+                                  <Pencil className="h-4 w-4" />
+                                  Editar
+                                </span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(item.id)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Trash2 className="h-4 w-4" />
+                                  Remover
+                                </span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="interactive-tap h-9 w-9 rounded-2xl" aria-label="Mais opções">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onClick={() => startEdit(item)}>
-                            <span className="flex items-center gap-2">
-                              <Pencil className="h-4 w-4" />
-                              Editar
-                            </span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <span className="flex items-center gap-2">
-                              <Trash2 className="h-4 w-4" />
-                              Remover
-                            </span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
           ))}
         </PageContainer>
       )}

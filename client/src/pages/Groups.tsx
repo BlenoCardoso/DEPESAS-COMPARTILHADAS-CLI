@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import BodyPortal from "@/components/BodyPortal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
+import { Bell, Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -29,6 +31,8 @@ export default function Groups() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsGroup, setActionsGroup] = useState<any | null>(null);
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const [, navigate] = useLocation();
 
@@ -36,7 +40,23 @@ export default function Groups() {
     enabled: isAuthenticated,
   });
 
+  const { data: groupStats } = trpc.groups.myStats.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: invitations } = trpc.invitations.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchOnWindowFocus: false,
+  });
+
   const groupsList = Array.isArray(groups) ? groups : [];
+
+  const statsByGroupId = new Map(
+    (Array.isArray(groupStats) ? groupStats : []).map((s: any) => [s.groupId, s] as const)
+  );
+
+  const pendingInvitesCount = (Array.isArray(invitations) ? invitations : []).filter((inv: any) => inv?.status === "pending").length;
 
   const visibleGroups = listFilter === "active"
     ? groupsList.filter((g) => g?.group?.id && g.group.id === currentGroup?.id)
@@ -58,7 +78,7 @@ export default function Groups() {
       refetch();
     },
     onError: (error) => {
-      toast.error("Erro ao criar grupo: " + error.message);
+      toast.error("Não foi possível criar o grupo");
     },
   });
 
@@ -68,7 +88,7 @@ export default function Groups() {
       refetch();
     },
     onError: (error) => {
-      toast.error("Erro ao excluir grupo: " + error.message);
+      toast.error("Não foi possível excluir o grupo");
     },
   });
 
@@ -78,12 +98,12 @@ export default function Groups() {
       setInviteOpen(false);
       setInviteEmail("");
     },
-    onError: (error) => toast.error("Erro ao convidar: " + error.message),
+    onError: () => toast.error("Não foi possível enviar o convite"),
   });
 
   const handleInvite = () => {
     if (!inviteGroupId) return;
-    if (!inviteEmail.trim()) { toast.error("Email é obrigatório"); return; }
+    if (!inviteEmail.trim()) { toast.error("E-mail obrigatório"); return; }
     inviteMutation.mutate({ groupId: inviteGroupId, invitedEmail: inviteEmail.trim() });
   };
 
@@ -130,7 +150,7 @@ export default function Groups() {
 
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="interactive-tap gap-2 rounded-2xl">
+            <Button size="sm" className="interactive-tap gap-2 rounded-2xl hidden sm:inline-flex">
               <Plus className="h-4 w-4" />
               Novo
             </Button>
@@ -219,11 +239,32 @@ export default function Groups() {
           </AccordionTrigger>
           <AccordionContent className="pt-3">
             <p className="text-sm text-muted-foreground">
-              O grupo ativo define quais despesas aparecem em “Compart.” e quais membros recebem notificações.
+              O grupo ativo define quais despesas aparecem em “Despesas compartilhadas” e quais membros recebem notificações.
             </p>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      <Link href="/invitations">
+        <Card className="interactive-card rounded-2xl border border-border/60 bg-card/60 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-2xl bg-primary/15 p-2 text-primary">
+                <Bell className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">Convites</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {pendingInvitesCount > 0 ? `${pendingInvitesCount} pendente${pendingInvitesCount > 1 ? "s" : ""}` : "Nenhum pendente"}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" className="rounded-2xl" aria-label="Ver convites">
+                Ver
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup
@@ -247,7 +288,7 @@ export default function Groups() {
       </div>
 
       {groupsList.length === 0 ? (
-        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+        <PageContainer className="rounded-2xl border border-border/60 bg-card/80">
           <EmptyState
             title="Nenhum grupo encontrado"
             description="Crie seu primeiro grupo para começar a dividir despesas."
@@ -269,6 +310,9 @@ export default function Groups() {
         <PageContainer className="space-y-2">
           {visibleGroups.map((item) => {
             const isActive = currentGroup?.id === item.group.id;
+            const stats = statsByGroupId.get(item.group.id) as any | undefined;
+            const membersCount = stats?.membersCount;
+            const pendingCount = stats?.pendingExpensesCount;
             return (
               <motion.div
                 key={item.group.id}
@@ -298,7 +342,8 @@ export default function Groups() {
                           ) : null}
                         </div>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          Criado em {new Date(item.group.createdAt).toLocaleDateString("pt-BR")}
+                          {typeof membersCount === "number" ? `${membersCount} membro${membersCount === 1 ? "" : "s"}` : "Membros"}
+                          {typeof pendingCount === "number" ? ` • ${pendingCount} pendente${pendingCount === 1 ? "" : "s"}` : ""}
                         </p>
                       </div>
 
@@ -312,49 +357,64 @@ export default function Groups() {
                         <LogIn className="h-4 w-4" />
                       </Button>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="interactive-tap h-9 w-9 rounded-2xl"
-                            aria-label="Mais opções"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/groups/${item.group.id}`}>
+                      {isMobile ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="interactive-tap h-9 w-9 rounded-2xl"
+                          aria-label="Mais opções"
+                          onClick={() => {
+                            setActionsGroup(item.group);
+                            setActionsOpen(true);
+                          }}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="interactive-tap h-9 w-9 rounded-2xl"
+                              aria-label="Mais opções"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/groups/${item.group.id}`}>
+                                <span className="flex items-center gap-2">
+                                  <Settings className="h-4 w-4" />
+                                  Configurar
+                                </span>
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setInviteGroupId(item.group.id);
+                                setInviteOpen(true);
+                              }}
+                            >
                               <span className="flex items-center gap-2">
-                                <Settings className="h-4 w-4" />
-                                Configurar
+                                <MailPlus className="h-4 w-4" />
+                                Convidar
                               </span>
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setInviteGroupId(item.group.id);
-                              setInviteOpen(true);
-                            }}
-                          >
-                            <span className="flex items-center gap-2">
-                              <MailPlus className="h-4 w-4" />
-                              Convidar
-                            </span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => handleDelete(item.group.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <span className="flex items-center gap-2">
-                              <Trash2 className="h-4 w-4" />
-                              Excluir
-                            </span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDelete(item.group.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Trash2 className="h-4 w-4" />
+                                Excluir
+                              </span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -363,15 +423,87 @@ export default function Groups() {
           })}
         </PageContainer>
       )}
+
+      <Drawer open={actionsOpen} onOpenChange={setActionsOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Ações do grupo</DrawerTitle>
+            <DrawerDescription className="text-base">
+              {actionsGroup?.name ? actionsGroup.name : ""}
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="px-4 pb-2">
+            <div className="grid gap-2">
+              <Button
+                className="justify-start gap-2 rounded-2xl"
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (actionsGroup?.id) navigate(`/groups/${actionsGroup.id}`);
+                }}
+              >
+                <Settings className="h-4 w-4" />
+                Configurar
+              </Button>
+
+              <Button
+                variant="secondary"
+                className="justify-start gap-2 rounded-2xl"
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (actionsGroup?.id) {
+                    setInviteGroupId(actionsGroup.id);
+                    setInviteOpen(true);
+                  }
+                }}
+              >
+                <MailPlus className="h-4 w-4" />
+                Convidar
+              </Button>
+
+              <Button
+                variant="destructive"
+                className="justify-start gap-2 rounded-2xl"
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (actionsGroup?.id) handleDelete(actionsGroup.id);
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir grupo
+              </Button>
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <Button variant="outline" className="rounded-2xl" onClick={() => setActionsOpen(false)}>
+              Fechar
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <BodyPortal>
+        <Button
+          className="md:hidden fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
+          style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
+          onClick={() => setIsCreateOpen(true)}
+          aria-label="Criar novo grupo"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      </BodyPortal>
+
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Convidar para o Grupo</DialogTitle>
-            <DialogDescription>Informe o email do usuário para enviar um convite</DialogDescription>
+            <DialogDescription>Convide por e-mail</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Email *</Label>
+              <Label>E-mail *</Label>
               <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="usuario@exemplo.com" />
             </div>
           </div>

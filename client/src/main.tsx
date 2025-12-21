@@ -109,6 +109,15 @@ const trpcClient = trpc.createClient({
         const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok) {
           const text = await response.text().catch(() => "");
+          // tRPC server pode responder 404 quando o router/procedure não existe (backend desatualizado).
+          if (response.status === 404 && text.includes("No procedure found on path")) {
+            const pathMatch = text.match(/No procedure found on path\\s+\\"([^\\"]+)\\"/);
+            const missingPath = pathMatch?.[1];
+            throw new Error(
+              `Backend desatualizado: o servidor que o APK está usando não possui a rota${missingPath ? ` ${missingPath}` : ""}. ` +
+              `Atualize/publicque o backend (mesma versão deste projeto) e depois gere um novo APK com VITE_API_URL apontando para esse backend.`
+            );
+          }
           throw new Error(
             `Erro da API (${response.status}). ${text ? text.slice(0, 180) : "Resposta vazia"}`
           );

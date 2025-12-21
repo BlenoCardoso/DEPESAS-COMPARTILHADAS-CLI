@@ -175,7 +175,7 @@ export default function FinancialProfile() {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="flex items-center justify-between rounded-2xl border p-3">
                   <div className="space-y-0.5">
                     <Label htmlFor="visible" className="text-sm font-medium">
                       Tornar renda visível
@@ -281,7 +281,7 @@ export default function FinancialProfile() {
                       return (
                         <div
                           key={m.user.id}
-                          className="flex items-center justify-between p-2 rounded-lg border"
+                          className="flex items-center justify-between p-2 rounded-2xl border"
                         >
                           <div>
                             <p className="text-sm font-medium">
@@ -297,7 +297,7 @@ export default function FinancialProfile() {
                             )}
                           </div>
                           {m.member.role === "owner" && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
                               Dono
                             </span>
                           )}

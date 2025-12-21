@@ -28,7 +28,7 @@ export function FirebaseLoginPage() {
           <img 
             src={APP_LOGO} 
             alt={APP_TITLE}
-            className="mx-auto h-16 w-16 rounded-lg"
+            className="mx-auto h-16 w-16 rounded-2xl"
           />
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{APP_TITLE}</h1>
@@ -93,27 +93,17 @@ export function FirebaseLoginPage() {
               )}
             </Button>
 
-            {/* Informações sobre o Firebase */}
             <div className="text-center text-sm text-muted-foreground space-y-1">
-              <p>🔒 Login seguro com Firebase Authentication</p>
-              <p>⚡ Sincronização em tempo real</p>
-              <p>📱 Funciona offline</p>
+              <p>Login seguro</p>
+              <p>Atualização automática</p>
+              <p>Funciona offline</p>
             </div>
           </CardContent>
         </Card>
 
         {/* Footer */}
         <div className="text-center text-xs text-muted-foreground">
-          <p>
-            Ao entrar, você concorda com nossos{" "}
-            <a href="#" className="underline hover:text-foreground">
-              Termos de Uso
-            </a>{" "}
-            e{" "}
-            <a href="#" className="underline hover:text-foreground">
-              Política de Privacidade
-            </a>
-          </p>
+          <p>Ao entrar, você concorda com os termos e a privacidade do app.</p>
         </div>
       </div>
     </div>

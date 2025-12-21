@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Pasta de anexos de despesas compartilhadas
+    match /expense-attachments/{groupId}/{expenseId}/{fileName} {
+      // Permitir leitura para membros do grupo
+      allow read: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
+
+      // Permitir upload (max 10MB) para membros autenticados
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && firestore.exists(/databases/(default)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
+
+      // Permitir delete apenas do criador ou owner do grupo
+      allow delete: if request.auth != null
+        && (resource.metadata.uploadedBy == request.auth.uid
+            || firestore.get(/databases/(default)/documents/groups/$(groupId)).data.ownerId == request.auth.uid);
+    }
+
+    // Pasta de avatars de usuários (opcional futura)
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Negar acesso a tudo que não está especificado
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

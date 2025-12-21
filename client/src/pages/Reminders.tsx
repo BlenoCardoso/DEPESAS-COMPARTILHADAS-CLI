@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,8 +96,23 @@ export default function Reminders() {
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
-        <p className="text-sm text-muted-foreground">Notificações rápidas por data/hora.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
+            <p className="text-sm text-muted-foreground">Organize lembretes por data e hora.</p>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              "shrink-0 rounded-full text-[11px] border " +
+              (stats.today > 0
+                ? "bg-warning/15 text-warning border-warning/25"
+                : "bg-primary/10 text-primary border-primary/20")
+            }
+          >
+            {stats.today > 0 ? `Hoje: ${stats.today}` : `Próximos: ${stats.upcoming}`}
+          </Badge>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
@@ -233,31 +249,40 @@ export default function Reminders() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
       ) : remindersList.length === 0 ? (
-        <Card className="rounded-2xl border border-border/70">
-          <CardContent className="py-10 text-center space-y-2">
-            <p className="text-muted-foreground">Nenhum lembrete</p>
-            <Button onClick={() => setIsCreateOpen(true)} className="rounded-2xl">Criar primeiro</Button>
-          </CardContent>
-        </Card>
+        <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+          <EmptyState
+            title="Nenhum lembrete"
+            description="Crie seu primeiro lembrete."
+            cta={
+              <Button onClick={() => setIsCreateOpen(true)} className="gap-2 rounded-2xl">
+                <Plus className="h-4 w-4" />
+                Criar primeiro
+              </Button>
+            }
+          />
+        </PageContainer>
       ) : (
         <PageContainer className="space-y-2">
           {visibleReminders.length === 0 ? (
-            <Card className="rounded-2xl border border-border/70">
-              <CardContent className="py-10 text-center space-y-2">
-                <p className="text-muted-foreground">Nenhum lembrete com esses filtros</p>
-                <Button
-                  variant="outline"
-                  className="rounded-2xl"
-                  onClick={() => {
-                    setFilterText("");
-                    setFilterCategory("");
-                    setWhenFilter("upcoming");
-                  }}
-                >
-                  Limpar filtros
-                </Button>
-              </CardContent>
-            </Card>
+            <PageContainer className="rounded-3xl border border-border/60 bg-card/80">
+              <EmptyState
+                title="Nada por aqui"
+                description="Nenhum lembrete com esses filtros."
+                cta={
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => {
+                      setFilterText("");
+                      setFilterCategory("");
+                      setWhenFilter("upcoming");
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                }
+              />
+            </PageContainer>
           ) : (
             visibleReminders.map((r) => (
               <Card
