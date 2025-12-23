@@ -117,7 +117,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{groupQuery.data.name}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{groupQuery.data.name}</h1>
           <p className="text-muted-foreground">Detalhes do grupo</p>
         </div>
         <div className="flex gap-2">
@@ -144,7 +144,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <Card className="rounded-2xl border bg-card shadow-sm">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Membros</p>
-            <p className="mt-1 text-2xl font-bold leading-none">
+            <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">
               {typeof statsQuery.data?.membersCount === "number" ? statsQuery.data.membersCount : (membersQuery.data?.length ?? "—")}
             </p>
           </CardContent>
@@ -152,7 +152,7 @@ export default function GroupDetails({ groupId }: GroupDetailsProps) {
         <Card className="rounded-2xl border bg-card shadow-sm">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Pendentes</p>
-            <p className="mt-1 text-2xl font-bold leading-none">
+            <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">
               {typeof statsQuery.data?.pendingExpensesCount === "number" ? statsQuery.data.pendingExpensesCount : "—"}
             </p>
           </CardContent>

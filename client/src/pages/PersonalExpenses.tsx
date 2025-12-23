@@ -2,7 +2,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { EmptyState } from "@/components/EmptyState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
-import BodyPortal from "@/components/BodyPortal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -11,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { ArrowUpDown, Check, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowUpDown, Check, Loader2, MoreVertical, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatCents, parseReaisToCents } from "@/lib/utils";
+import { CategoryPill } from "@/components/CategoryVisual";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useLocation } from "wouter";
@@ -22,7 +22,7 @@ import { useLocation } from "wouter";
 export default function PersonalExpenses() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState(""); // valor em reais (string)
@@ -158,6 +158,14 @@ export default function PersonalExpenses() {
 
   const handleDelete = (id: string) => { if (confirm("Remover despesa?")) deleteMutation.mutate({ id }); };
 
+  useEffect(() => {
+    if (!isMobile) return;
+    if (!location || !location.includes("create=1")) return;
+    setIsCreateOpen(true);
+    const clean = (location.split("?")[0] || "/personal-expenses").split("#")[0] || "/personal-expenses";
+    if (clean !== location) navigate(clean);
+  }, [isMobile, location]);
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
@@ -196,13 +204,13 @@ export default function PersonalExpenses() {
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">Itens</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{visibleExpenses.length}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{visibleExpenses.length}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="mt-1 truncate text-base font-semibold leading-tight">{formatCents(totalAmount)}</p>
+                  <p className="font-display tabular-nums mt-1 truncate text-base font-semibold leading-tight tracking-tight">{formatCents(totalAmount)}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
@@ -215,16 +223,6 @@ export default function PersonalExpenses() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-      <BodyPortal>
-        <Button
-          className="md:hidden fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
-          style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
-          onClick={() => setIsCreateOpen(true)}
-          aria-label="Adicionar despesa pessoal"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-      </BodyPortal>
 
       <PageContainer className="rounded-2xl border border-border/60 bg-card/60 p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -354,6 +352,7 @@ export default function PersonalExpenses() {
           <EmptyState
             title="Sem despesas registradas"
             description="Registre seus lançamentos pessoais." 
+            icon={<Wallet className="h-10 w-10" />}
             cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Adicionar agora</Button>}
           />
         </PageContainer>
@@ -382,7 +381,7 @@ export default function PersonalExpenses() {
                               {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
                             </span>
                             {item.category ? (
-                              <span className="text-[11px] text-muted-foreground">{item.category}</span>
+                              <CategoryPill name={item.category} />
                             ) : null}
                           </div>
                         </div>

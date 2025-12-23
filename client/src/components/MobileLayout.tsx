@@ -9,16 +9,20 @@ import { cn } from "@/lib/utils";
 import { PageContainer } from "./layout/PageContainer";
 import { useFirebaseMessaging } from "@/hooks/useFirebaseMessaging";
 import { AppHeader } from "./AppHeader";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import {
   Bell,
   Calendar,
   CheckSquare,
   Clock,
   CreditCard,
+  BarChart3,
   Home,
   LogOut,
   Menu,
+  Plus,
   PieChart,
+  ReceiptText,
   Settings,
   Users,
   Wallet,
@@ -68,15 +72,17 @@ const SUPPORT_NAV: NavItem[] = [
 const BOTTOM_NAV: NavItem[] = [
   { icon: Home, label: "Início", path: "/" },
   { icon: Users, label: "Grupos", path: "/groups" },
-  { icon: CreditCard, label: "Compartilhadas", path: "/shared-expenses" },
-  { icon: PieChart, label: "Relatórios", path: "/reports" },
+  { icon: ReceiptText, label: "Compartilhadas", path: "/shared-expenses" },
+  { icon: BarChart3, label: "Relatórios", path: "/reports" },
 ];
 
 const HEADER_SHORTCUT_PATHS = new Set(["/notifications", "/settings"]);
 
 function isPathActive(currentPath: string, itemPath: string) {
-  if (itemPath === "/") return currentPath === "/";
-  return currentPath === itemPath || currentPath.startsWith(itemPath + "/");
+  const cleanCurrent = currentPath.split("?")[0]?.split("#")[0] || "/";
+  const cleanItem = itemPath.split("?")[0]?.split("#")[0] || itemPath;
+  if (cleanItem === "/") return cleanCurrent === "/";
+  return cleanCurrent === cleanItem || cleanCurrent.startsWith(cleanItem + "/");
 }
 
 function getInitials(userName?: string | null, userEmail?: string | null) {
@@ -95,6 +101,7 @@ interface MobileLayoutProps {
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
+  const { currentGroup } = useCurrentGroup();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
 
@@ -141,28 +148,31 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         <div className="flex h-full min-h-0 flex-col">
           <AppHeader
             title={activeTitle}
+            variant="solid"
             left={
-              <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(forceMobile ? "" : "lg:hidden", "interactive-tap rounded-2xl")}
-                  >
-                    <Menu className="h-5 w-5" />
-                    <span className="sr-only">Abrir menu</span>
-                  </Button>
-                </SheetTrigger>
-                <NavigationDrawer
-                  onNavigate={() => setIsMenuOpen(false)}
-                  unreadCount={unreadCount ?? 0}
-                  onLogout={handleLogout}
-                  userEmail={user?.email}
-                  userName={user?.name}
-                  userAvatarUrl={(user as any)?.avatarUrl}
-                  activePath={location}
-                />
-              </Sheet>
+              forceMobile ? null : (
+                <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                        className={cn("hidden md:inline-flex lg:hidden", "interactive-tap rounded-2xl")}
+                    >
+                      <Menu className="h-5 w-5" />
+                      <span className="sr-only">Abrir menu</span>
+                    </Button>
+                  </SheetTrigger>
+                  <NavigationDrawer
+                    onNavigate={() => setIsMenuOpen(false)}
+                    unreadCount={unreadCount ?? 0}
+                    onLogout={handleLogout}
+                    userEmail={user?.email}
+                    userName={user?.name}
+                    userAvatarUrl={(user as any)?.avatarUrl}
+                    activePath={location}
+                  />
+                </Sheet>
+              )
             }
             right={
               forceMobile ? (
@@ -222,39 +232,114 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         </div>
       </div>
 
-      <BottomNavigation forceMobile={forceMobile} activePath={location} unreadCount={unreadCount ?? 0} />
+      <BottomNavigation
+        forceMobile={forceMobile}
+        activePath={location}
+        unreadCount={unreadCount ?? 0}
+        onAdd={() => {
+          const clean = location.split("?")[0]?.split("#")[0] || "/";
+          const target = clean.startsWith("/personal-expenses")
+            ? "/personal-expenses?create=1"
+            : clean.startsWith("/shared-expenses")
+              ? "/shared-expenses?create=1"
+              : currentGroup?.id
+                ? "/shared-expenses?create=1"
+                : "/personal-expenses?create=1";
+          setLocation(target);
+        }}
+      />
     </div>
   );
 }
 
-function BottomNavigation({ forceMobile, activePath, unreadCount }: { forceMobile: boolean; activePath: string; unreadCount: number }) {
+function BottomNavigation({
+  forceMobile,
+  activePath,
+  unreadCount,
+  onAdd,
+}: {
+  forceMobile: boolean;
+  activePath: string;
+  unreadCount: number;
+  onAdd: () => void;
+}) {
   return (
     <nav
       className={cn(
         forceMobile ? "" : "md:hidden",
-        "safe-area-bottom fixed bottom-0 left-0 right-0 z-40 w-full border-t border-border/70 bg-background/75 backdrop-blur-xl shadow-sm"
+        "safe-area-bottom fixed bottom-0 left-0 right-0 z-40 w-full border-t border-border/70 bg-card/95 shadow-md supports-[backdrop-filter]:bg-card/80 supports-[backdrop-filter]:backdrop-blur"
       )}
     >
-      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-around px-2 sm:px-4">
-        {BOTTOM_NAV.map(item => {
-          const Icon = item.icon;
-          const isActive = isPathActive(activePath, item.path);
-          return (
-            <Link key={item.path} href={item.path}>
-              <div
-                className={cn(
-                  "interactive-card flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[11px] font-medium transition-all duration-150",
-                  isActive
-                    ? "bg-primary/15 text-primary scale-105"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:scale-[1.03]"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </div>
-            </Link>
-          );
-        })}
+      <div className="relative mx-auto w-full max-w-5xl px-2 sm:px-4 overflow-visible">
+        <div className="grid h-14 grid-cols-5 items-center overflow-visible">
+          {BOTTOM_NAV.slice(0, 2).map((item) => {
+            const Icon = item.icon;
+            const isActive = isPathActive(activePath, item.path);
+            return (
+              <Link key={item.path} href={item.path}>
+                <div className="flex flex-col items-center justify-center gap-1 py-1">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                      isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium leading-none",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+
+          <div className="relative flex items-center justify-center">
+            <Button
+              type="button"
+              onClick={onAdd}
+              className={cn(
+                "interactive-tap absolute -top-6 h-14 w-14 rounded-full p-0 bg-primary text-primary-foreground shadow-md ring-4 ring-background",
+                "hover:bg-primary/95"
+              )}
+              aria-label="Adicionar despesa"
+            >
+              <Plus className="h-7 w-7" />
+            </Button>
+          </div>
+
+          {BOTTOM_NAV.slice(2).map((item) => {
+            const Icon = item.icon;
+            const isActive = isPathActive(activePath, item.path);
+            return (
+              <Link key={item.path} href={item.path}>
+                <div className="flex flex-col items-center justify-center gap-1 py-1">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                      isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium leading-none",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

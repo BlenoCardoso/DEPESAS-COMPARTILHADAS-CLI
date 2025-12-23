@@ -3,18 +3,37 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Progress } from "@/components/ui/progress";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { APP_TITLE } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import { CreditCard, PieChart, Plus, Users, Wallet, Bell } from "lucide-react";
+import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
+import { CreditCard, PieChart, Plus, Users, Wallet, Bell, ArrowRightLeft, BarChart3, Loader2 } from "lucide-react";
+import { PieChart as RePieChart, Pie, Cell } from "recharts";
 import { Link } from "wouter";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value as any);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isInMonth(value: unknown, year: number, monthIndex: number) {
+  const d = asDate(value);
+  if (!d) return false;
+  return d.getFullYear() === year && d.getMonth() === monthIndex;
+}
 
 export default function Home() {
   const { user, loading, isAuthenticated, loginWithGoogle } = useAuth();
   const isMobile = useIsMobile();
   const [homeView, setHomeView] = useState<"summary" | "actions">("summary");
+  const { currentGroup, setCurrentGroupId } = useCurrentGroup();
+  const groupId = currentGroup?.id ?? null;
 
   // Queries com cache otimizado (5 minutos de staleTime)
   const { data: groups, isLoading: groupsLoading } = trpc.groups.list.useQuery(undefined, {
@@ -23,6 +42,14 @@ export default function Home() {
     gcTime: 10 * 60 * 1000, // 10 minutos (antigo cacheTime)
   });
   const groupsList = Array.isArray(groups) ? groups : [];
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (groupId) return;
+    if (groupsList.length > 0) {
+      setCurrentGroupId(groupsList[0].group.id);
+    }
+  }, [groupId, groupsList, isAuthenticated, setCurrentGroupId]);
 
   const { data: unreadCount, isLoading: unreadLoading } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -49,7 +76,99 @@ export default function Home() {
     staleTime: 5 * 60 * 1000, // 5 minutos
   });
 
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonthIndex = now.getMonth();
+
+  const { data: sharedMonthCategoryTotals, isLoading: sharedMonthTotalsLoading } =
+    trpc.sharedExpenses.monthCategoryTotalsForUser.useQuery(
+      { year: currentYear, month: currentMonthIndex + 1 },
+      {
+        enabled: Boolean(isAuthenticated),
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+      }
+    );
+
+  const balancesQuery = trpc.settlements.calculateBalances.useQuery(
+    { groupId: groupId! },
+    {
+      enabled: Boolean(isAuthenticated && groupId),
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    }
+  );
+
   const firstName = user?.name?.split(" ")[0] ?? "";
+
+  const daysInMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
+  const monthProgress = Math.round((now.getDate() / daysInMonth) * 100);
+
+  const personalMonthExpenses = useMemo(() => {
+    const list = Array.isArray(personalExpenses) ? personalExpenses : [];
+    return list.filter((e: any) => isInMonth(e?.date, currentYear, currentMonthIndex));
+  }, [currentMonthIndex, currentYear, personalExpenses]);
+
+  const personalMonthTotal = personalMonthExpenses.reduce((sum: number, e: any) => sum + (Number(e?.amount) || 0), 0);
+  const sharedMonthTotal = useMemo(() => {
+    const list = Array.isArray(sharedMonthCategoryTotals) ? sharedMonthCategoryTotals : [];
+    return list.reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+  }, [sharedMonthCategoryTotals]);
+  const monthTotal = personalMonthTotal + sharedMonthTotal;
+
+  const myBalance = useMemo(() => {
+    const uid = user?.id;
+    if (!uid) return 0;
+    const list = Array.isArray(balancesQuery.data) ? balancesQuery.data : [];
+    const mine = list.find((b: any) => b?.userId === uid);
+    return Number(mine?.balance) || 0;
+  }, [balancesQuery.data, user?.id]);
+
+  const iOwe = myBalance < 0 ? Math.abs(myBalance) : 0;
+  const iReceive = myBalance > 0 ? myBalance : 0;
+
+  const categoryBreakdown = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    for (const e of personalMonthExpenses as any[]) {
+      const name = String(e?.category || "Sem categoria").trim() || "Sem categoria";
+      totals.set(name, (totals.get(name) || 0) + (Number(e?.amount) || 0));
+    }
+
+    const sharedList = Array.isArray(sharedMonthCategoryTotals) ? sharedMonthCategoryTotals : [];
+    for (const item of sharedList as any[]) {
+      const name = String(item?.category || "Sem categoria").trim() || "Sem categoria";
+      totals.set(name, (totals.get(name) || 0) + (Number(item?.amount) || 0));
+    }
+
+    const sorted = Array.from(totals.entries())
+      .map(([category, value]) => ({ category, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const top = sorted.slice(0, 6);
+    const rest = sorted.slice(6);
+    const otherValue = rest.reduce((sum, item) => sum + item.value, 0);
+    const final = otherValue > 0 ? [...top, { category: "Outros", value: otherValue }] : top;
+
+    const palette = [
+      "var(--primary)",
+      "var(--info)",
+      "var(--success)",
+      "var(--warning)",
+      "var(--secondary-foreground)",
+      "var(--destructive)",
+      "var(--muted-foreground)",
+    ];
+
+    const config: Record<string, { label: string; color: string }> = {};
+    const data = final.map((item, idx) => {
+      const key = `c${idx}`;
+      config[key] = { label: item.category, color: palette[idx % palette.length] };
+      return { key, category: item.category, value: item.value, fill: `var(--color-${key})` };
+    });
+
+    return { data, config };
+  }, [personalMonthExpenses, sharedMonthCategoryTotals]);
 
   const recentPersonalExpenses = useMemo(() => {
     const list = Array.isArray(personalExpenses) ? [...personalExpenses] : [];
@@ -72,7 +191,7 @@ export default function Home() {
   }, [notifications]);
   
   // Loading state unificado
-  const isLoadingData = groupsLoading || personalLoading || sharedLoading;
+  const isLoadingData = groupsLoading || personalLoading || sharedLoading || sharedMonthTotalsLoading;
 
   if (loading) {
     return (
@@ -84,54 +203,61 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="max-w-md space-y-6">
-          <div className="space-y-2">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-border">
-              <CreditCard className="h-8 w-8" />
+      <div className="animate-fade-in">
+        <div className="mx-auto w-full max-w-md space-y-4 px-4 py-10">
+          <div className="rounded-3xl border border-border/60 bg-primary px-5 py-6 text-primary-foreground shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs uppercase tracking-widest text-primary-foreground/80">Bem-vindo</p>
+                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-4xl">{APP_TITLE}</h1>
+                <p className="text-sm text-primary-foreground/80">Controle despesas compartilhadas e pessoais.</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
+                <CreditCard className="h-5 w-5" />
+              </div>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{APP_TITLE}</h1>
-            <p className="text-base text-muted-foreground sm:text-lg">
-              Controle despesas compartilhadas e pessoais.
-            </p>
           </div>
 
-          <Accordion type="single" collapsible>
-            <AccordionItem value="features" className="border-none">
-              <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                <span className="flex flex-col items-start">
-                  <span className="text-sm font-semibold">Ver recursos</span>
-                  <span className="text-xs text-muted-foreground">Opcional</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="pt-3">
-                <div className="grid grid-cols-2 gap-4 py-2">
-                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                    <Users className="h-8 w-8 text-primary" />
-                    <span className="text-sm font-medium">Grupos</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                    <CreditCard className="h-8 w-8 text-secondary" />
-                    <span className="text-sm font-medium">Despesas</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                    <Wallet className="h-8 w-8 text-accent" />
-                    <span className="text-sm font-medium">Pessoal</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                    <PieChart className="h-8 w-8 text-info" />
-                    <span className="text-sm font-medium">Relatórios</span>
-                  </div>
-                </div>
+          <div className="rounded-2xl border border-border/60 bg-card/80 shadow-sm">
+            <div className="p-4">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="features" className="border-none">
+                  <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
+                    <span className="flex flex-col items-start">
+                      <span className="text-sm font-semibold">Ver recursos</span>
+                      <span className="text-xs text-muted-foreground">Opcional</span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-3">
+                    <div className="grid grid-cols-2 gap-4 py-2">
+                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
+                        <Users className="h-8 w-8 text-primary" />
+                        <span className="text-sm font-medium">Grupos</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
+                        <CreditCard className="h-8 w-8 text-secondary" />
+                        <span className="text-sm font-medium">Despesas</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
+                        <Wallet className="h-8 w-8 text-accent" />
+                        <span className="text-sm font-medium">Pessoal</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
+                        <PieChart className="h-8 w-8 text-info" />
+                        <span className="text-sm font-medium">Relatórios</span>
+                      </div>
+                    </div>
 
-                <div className="text-center text-xs text-muted-foreground space-y-1">
-                  <p>Login seguro</p>
-                  <p>Atualização automática</p>
-                  <p>Funciona offline</p>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+                    <div className="text-center text-xs text-muted-foreground space-y-1">
+                      <p>Login seguro</p>
+                      <p>Atualização automática</p>
+                      <p>Funciona offline</p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </div>
 
           <Button
             size="lg"
@@ -141,7 +267,7 @@ export default function Home() {
           >
             {loading ? (
               <div className="flex items-center space-x-2">
-                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Entrando...</span>
               </div>
             ) : (
@@ -175,20 +301,40 @@ export default function Home() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <Link href="/reports">
-        <Card className="interactive-card cursor-pointer rounded-2xl border border-border/60 bg-card shadow-sm">
-          <CardContent className="flex items-center justify-between gap-3 p-3">
-            <div className="space-y-1">
-              <p className="text-sm/5 text-muted-foreground">Olá, {firstName}!</p>
-              <p className="text-sm font-semibold">Acompanhe tudo em um só lugar.</p>
-              <p className="text-[11px] text-muted-foreground">Ver relatórios</p>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-primary text-primary-foreground shadow-sm">
+        <div className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm/5 text-primary-foreground/85">Olá{firstName ? `, ${firstName}` : ""}!</p>
+              <p className="font-display mt-1 text-2xl font-semibold tracking-tight leading-tight">
+                Visão geral do mês
+              </p>
+              <p className="mt-1 text-xs text-primary-foreground/80">
+                {now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+              </p>
             </div>
-            <div className="rounded-2xl bg-primary/10 p-2 text-primary">
-              <CreditCard className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
+              <BarChart3 className="h-5 w-5" />
             </div>
-          </CardContent>
-        </Card>
-      </Link>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+              <p className="text-[11px] text-primary-foreground/75">Total este mês</p>
+              <p className="font-display tabular-nums mt-1 text-lg font-semibold tracking-tight">{formatCents(monthTotal)}</p>
+            </div>
+            <Link href="/reports">
+              <div className="interactive-card h-full rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+                <p className="text-[11px] text-primary-foreground/75">Relatórios</p>
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-sm font-semibold">Ver detalhes</p>
+                  <ArrowRightLeft className="h-4 w-4" />
+                </div>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup
@@ -208,16 +354,130 @@ export default function Home() {
       </div>
 
       {homeView === "summary" ? (
-        <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "summary"}>
-          <AccordionItem value="summary" className="border-none">
-            <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-              <span className="flex flex-col items-start">
-                <span className="text-sm font-semibold">Resumo</span>
-                <span className="text-xs text-muted-foreground">Opcional</span>
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="pt-3">
-              <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <div>
+              <p className="text-sm font-semibold">Resumo</p>
+              <p className="text-xs text-muted-foreground">Cards principais e visão do mês</p>
+            </div>
+          </div>
+
+          <Link href="/group-balances">
+            <Card className="interactive-card cursor-pointer rounded-2xl border border-border/60 bg-card shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Saldo do grupo</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {currentGroup?.name ? currentGroup.name : (groupsList.length ? "Selecione um grupo" : "Crie um grupo para ver saldos")}
+                    </p>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <ArrowRightLeft className="h-4 w-4" />
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-border/60 bg-background/60 p-3">
+                    <p className="text-[11px] text-muted-foreground">Você deve</p>
+                    <p className="font-display tabular-nums mt-1 text-base font-semibold tracking-tight">{formatCents(iOwe)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/60 p-3">
+                    <p className="text-[11px] text-muted-foreground">A receber</p>
+                    <p className="font-display tabular-nums mt-1 text-base font-semibold tracking-tight">{formatCents(iReceive)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Este mês</CardTitle>
+              <CardDescription className="text-xs">Acompanhamento rápido • {monthProgress}% do mês</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground">Total gasto</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-semibold tracking-tight">{formatCents(monthTotal)}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Pessoal: {formatCents(personalMonthTotal)} • Compartilhadas: {formatCents(sharedMonthTotal)}
+                  </p>
+                </div>
+                <div className="shrink-0 rounded-2xl border border-border/60 bg-primary/10 px-3 py-2 text-primary">
+                  <p className="text-[11px] font-semibold">Dia</p>
+                  <p className="font-display tabular-nums text-lg font-semibold leading-none">{now.getDate()}/{daysInMonth}</p>
+                </div>
+              </div>
+              <Progress value={monthProgress} />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Despesas por categoria</CardTitle>
+              <CardDescription className="text-xs">Mês atual • Pessoal + grupo atual (se houver)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingData ? (
+                <p className="text-xs text-muted-foreground">Carregando…</p>
+              ) : categoryBreakdown.data.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem dados suficientes para o gráfico.</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
+                  <div className="space-y-2">
+                    {categoryBreakdown.data.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill as any }} />
+                          <span className="min-w-0 truncate text-sm font-medium">{item.category}</span>
+                        </div>
+                        <span className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <ChartContainer
+                    className="aspect-square w-full sm:w-[220px]"
+                    config={categoryBreakdown.config}
+                  >
+                    <RePieChart>
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            nameKey="key"
+                            formatter={(value) => {
+                              const cents = Number(value) || 0;
+                              return (
+                                <span className="font-display tabular-nums text-foreground font-semibold">
+                                  {formatCents(cents)}
+                                </span>
+                              );
+                            }}
+                          />
+                        }
+                      />
+                      <Pie
+                        data={categoryBreakdown.data}
+                        dataKey="value"
+                        nameKey="key"
+                        innerRadius={55}
+                        outerRadius={85}
+                        stroke="transparent"
+                      >
+                        {categoryBreakdown.data.map((entry) => (
+                          <Cell key={entry.key} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                    </RePieChart>
+                  </ChartContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-2">
                 {/* Card Grupos com skeleton */}
                 <Link href="/groups">
                   <Card className="interactive-card cursor-pointer rounded-2xl border bg-card shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
@@ -250,7 +510,7 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold">{groupsList.length}</p>
+                            <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{groupsList.length}</p>
                             <p className="text-[11px] text-muted-foreground">ativos</p>
                           </div>
                         </div>
@@ -285,11 +545,11 @@ export default function Home() {
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-semibold">Compartilhadas</p>
-                              <p className="text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
+                              <p className="font-display tabular-nums text-[12px] text-muted-foreground truncate">{formatCents(sharedCountData?.totalAmount ?? 0)} total</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold">{sharedCountData?.count ?? 0}</p>
+                            <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{sharedCountData?.count ?? 0}</p>
                             <p className="text-[11px] text-muted-foreground">despesas</p>
                           </div>
                         </div>
@@ -324,11 +584,11 @@ export default function Home() {
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-semibold">Pessoal</p>
-                              <p className="text-[12px] text-muted-foreground truncate">{formatCents(personalTotal)} total</p>
+                              <p className="font-display tabular-nums text-[12px] text-muted-foreground truncate">{formatCents(personalTotal)} total</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold">{personalExpenses?.length ?? 0}</p>
+                            <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{personalExpenses?.length ?? 0}</p>
                             <p className="text-[11px] text-muted-foreground">itens</p>
                           </div>
                         </div>
@@ -367,7 +627,7 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold">{unreadCount || 0}</p>
+                            <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{unreadCount || 0}</p>
                             <p className="text-[11px] text-muted-foreground">não lidas</p>
                           </div>
                         </div>
@@ -375,89 +635,81 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 </Link>
-              </div>
+          </div>
 
-              <Accordion type="single" collapsible>
-                <AccordionItem value="details" className="border-none">
-                  <AccordionTrigger className="mt-3 rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                    <span className="flex flex-col items-start">
-                      <span className="text-sm font-semibold">Detalhes</span>
-                      <span className="text-xs text-muted-foreground">Últimos lançamentos e alertas</span>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Card className="rounded-2xl border border-border/60 bg-card/60">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm">Despesas pessoais</CardTitle>
-                          <CardDescription className="text-xs">Últimas {recentPersonalExpenses.length} • {formatCents(personalTotal)}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          {personalLoading ? (
-                            <p className="text-xs text-muted-foreground">Carregando…</p>
-                          ) : recentPersonalExpenses.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Sem lançamentos recentes.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {recentPersonalExpenses.map((item: any) => (
-                                <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium">{item.title}</p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
-                                      {item.category ? ` • ${item.category}` : ""}
-                                    </p>
-                                  </div>
-                                  <p className="shrink-0 text-sm font-semibold">{formatCents(item.amount)}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
-                            <Link href="/personal-expenses">Ver todas</Link>
-                          </Button>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="rounded-2xl border border-border/60 bg-card/60">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm">Notificações</CardTitle>
-                          <CardDescription className="text-xs">{unreadCount || 0} não lidas • {notificationsCount} no total</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          {(unreadLoading || notificationsLoading) ? (
-                            <p className="text-xs text-muted-foreground">Carregando…</p>
-                          ) : recentNotifications.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Nada por aqui.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {recentNotifications.map((n: any) => (
-                                <div key={n.id} className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <p className="truncate text-sm font-medium">{n.title}</p>
-                                    {!n.read ? (
-                                      <span className="h-5 shrink-0 rounded-full bg-primary/15 px-2 text-[11px] font-medium text-primary">Nova</span>
-                                    ) : null}
-                                  </div>
-                                  <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">{n.message}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
-                            <Link href="/notifications">Ver tudo</Link>
-                          </Button>
-                        </CardContent>
-                      </Card>
+          <Card className="rounded-2xl border border-border/60 bg-card/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Detalhes</CardTitle>
+              <CardDescription className="text-xs">Últimos lançamentos e alertas</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2 sm:grid-cols-2">
+              <Card className="rounded-2xl border border-border/60 bg-card/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Despesas pessoais</CardTitle>
+                  <CardDescription className="font-display tabular-nums text-xs">Últimas {recentPersonalExpenses.length} • {formatCents(personalTotal)}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {personalLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando…</p>
+                  ) : recentPersonalExpenses.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Sem lançamentos recentes.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentPersonalExpenses.map((item: any) => (
+                        <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{item.title}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                              {item.category ? ` • ${item.category}` : ""}
+                            </p>
+                          </div>
+                          <p className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.amount)}</p>
+                        </div>
+                      ))}
                     </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+                  )}
+
+                  <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
+                    <Link href="/personal-expenses">Ver todas</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-2xl border border-border/60 bg-card/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Notificações</CardTitle>
+                  <CardDescription className="text-xs">{unreadCount || 0} não lidas • {notificationsCount} no total</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(unreadLoading || notificationsLoading) ? (
+                    <p className="text-xs text-muted-foreground">Carregando…</p>
+                  ) : recentNotifications.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nada por aqui.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentNotifications.map((n: any) => (
+                        <div key={n.id} className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="truncate text-sm font-medium">{n.title}</p>
+                            {!n.read ? (
+                              <span className="h-5 shrink-0 rounded-full bg-primary/15 px-2 text-[11px] font-medium text-primary">Nova</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">{n.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Button asChild variant="outline" className="interactive-tap w-full rounded-2xl">
+                    <Link href="/notifications">Ver tudo</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "actions"}>
           <AccordionItem value="actions" className="border-none">

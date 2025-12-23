@@ -15,14 +15,17 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import BodyPortal from "@/components/BodyPortal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { CategoryIcon, CategoryOption } from "@/components/CategoryVisual";
 import { trpc } from "@/lib/trpc";
 import { deleteExpenseAttachment, uploadExpenseAttachment, validateImageFile } from "@/lib/storage";
 import { realsToCents, centsToRealsInput } from "@/lib/currency";
 import {
   CheckCircle2,
+  Loader2,
   MoreVertical,
   Pencil,
   Plus,
+  ReceiptText,
   Trash2,
   Paperclip,
   Clock,
@@ -117,7 +120,7 @@ export default function SharedExpenses() {
   const { isAuthenticated, user } = useAuth();
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const groupId = currentGroup?.id ?? null;
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const isMobile = useIsMobile();
   const [panel, setPanel] = useState<Panel>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -214,6 +217,15 @@ export default function SharedExpenses() {
     { groupId: groupId! },
     { enabled: !!groupId && isAuthenticated }
   );
+
+  const categoryIconByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of (categoriesQuery.data || []) as any[]) {
+      if (!c?.name) continue;
+      map.set(String(c.name), String(c.icon || ""));
+    }
+    return map;
+  }, [categoriesQuery.data]);
 
   const markSplitPaidMutation = trpc.sharedExpenses.markSplitPaid.useMutation({
     onSuccess: () => {
@@ -593,22 +605,16 @@ export default function SharedExpenses() {
     setPanel("create");
   };
 
+  useEffect(() => {
+    if (!isMobile) return;
+    if (!location || !location.includes("create=1")) return;
+    openCreate();
+    const clean = (location.split("?")[0] || "/shared-expenses").split("#")[0] || "/shared-expenses";
+    if (clean !== location) navigate(clean);
+  }, [isMobile, location]);
+
   return (
     <div className="relative space-y-3 sm:space-y-4 animate-fade-in">
-      {isMobile ? (
-        <BodyPortal>
-          <Button
-            className="fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
-            style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
-            onClick={openCreate}
-            aria-label="Adicionar despesa compartilhada"
-            disabled={!groupId}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-        </BodyPortal>
-      ) : null}
-
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup type="single" value="shared" className="w-full" variant="outline">
           <ToggleGroupItem
@@ -627,8 +633,40 @@ export default function SharedExpenses() {
         </ToggleGroup>
       </div>
 
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-primary text-primary-foreground shadow-sm">
+        <div className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm/5 text-primary-foreground/85 truncate">
+                {currentGroup ? `Despesas  ${currentGroup.name}` : "Despesas"}
+              </p>
+              <p className="font-display mt-1 text-2xl font-semibold tracking-tight leading-tight">Despesas</p>
+              <p className="mt-1 text-xs text-primary-foreground/80 truncate">
+                {monthLabel ? monthLabel : "Selecione um ms"}
+                {currentGroup ? "  " + currentGroup.name : ""}
+              </p>
+            </div>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
+              <ReceiptText className="h-5 w-5" />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+              <p className="text-[11px] text-primary-foreground/75">Total do perodo</p>
+              <p className="font-display tabular-nums mt-1 text-lg font-semibold tracking-tight">{formatCents(totalAmount)}</p>
+            </div>
+            <div className="rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+              <p className="text-[11px] text-primary-foreground/75">Pendentes</p>
+              <p className="font-display tabular-nums mt-1 text-lg font-semibold tracking-tight">{pendingCount}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Topo limpo */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Select value={groupId ?? undefined} onValueChange={(v) => setCurrentGroupId(v)}>
@@ -691,20 +729,20 @@ export default function SharedExpenses() {
       <div className="grid grid-cols-3 gap-2">
         <Card className="rounded-2xl border bg-card shadow-sm">
           <CardContent className="p-3">
-            <p className="text-[11px] text-muted-foreground">Total do mês</p>
-            <p className="mt-1 truncate text-sm font-semibold">{formatCents(totalAmount)}</p>
+            <p className="text-[11px] text-muted-foreground">Itens</p>
+            <p className="font-display tabular-nums mt-1 text-sm font-semibold tracking-tight">{expensesList.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border bg-card shadow-sm">
+          <CardContent className="p-3">
+            <p className="text-[11px] text-muted-foreground">Total</p>
+            <p className="font-display tabular-nums mt-1 truncate text-sm font-semibold tracking-tight">{formatCents(totalAmount)}</p>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border bg-card shadow-sm">
           <CardContent className="p-3">
             <p className="text-[11px] text-muted-foreground">Pendentes</p>
-            <p className="mt-1 text-sm font-semibold">{pendingCount}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border bg-card shadow-sm">
-          <CardContent className="p-3">
-            <p className="text-[11px] text-muted-foreground">Itens</p>
-            <p className="mt-1 text-sm font-semibold">{expensesList.length}</p>
+            <p className="font-display tabular-nums mt-1 text-sm font-semibold tracking-tight">{pendingCount}</p>
           </CardContent>
         </Card>
       </div>
@@ -733,8 +771,9 @@ export default function SharedExpenses() {
         <Card className="rounded-2xl border border-border/60 bg-card/80">
           <CardContent className="p-4">
             <EmptyState
-              title="Nenhuma despesa neste mês"
-              description="Use o botão + para adicionar a primeira despesa do período."
+              title="Nenhuma despesa ainda"
+              description="Toque no + para adicionar a primeira despesa do perodo."
+              icon={<ReceiptText className="h-10 w-10" />}
               cta={
                 <Button onClick={openCreate} disabled={!groupId} className="gap-2">
                   <Plus className="h-4 w-4" />
@@ -750,6 +789,10 @@ export default function SharedExpenses() {
             const isOwner = e.expense.createdBy === user?.id;
             const canEdit = isOwner || (!!e.expense.allowMemberEdits && !!user?.id);
             const isPaid = e.expense.status === "validated";
+            const isPaidByMe = Boolean(user?.id) && String(e.expense.paidBy) === String(user?.id);
+            const amountTone = !isPaid ? "text-muted-foreground" : isPaidByMe ? "text-success" : "text-foreground";
+            const categoryName = String(e.expense.category || "Sem categoria").trim() || "Sem categoria";
+            const categoryIcon = e.expense.category ? (categoryIconByName.get(e.expense.category) || undefined) : undefined;
 
             const dayKey = new Date(e.expense.date).toISOString().slice(0, 10);
             const prev = idx > 0 ? expensesList[idx - 1] : null;
@@ -769,31 +812,34 @@ export default function SharedExpenses() {
                 <Card className="interactive-card rounded-2xl border bg-card shadow-sm">
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-3">
-                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openDetail(e)}>
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold">{e.expense.title}</p>
-                          {e.expense.attachmentUrl ? <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> : null}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] text-muted-foreground">{new Date(e.expense.date).toLocaleDateString("pt-BR")}</span>
-                          {e.expense.category ? <span className="text-[11px] text-muted-foreground">{e.expense.category}</span> : null}
-                          <Badge
-                            variant="outline"
-                            className={`rounded-full text-[11px] border ${
-                              isPaid
-                                ? "bg-success/15 text-success border-success/25"
-                                : "bg-warning/15 text-warning border-warning/25"
-                            }`}
-                          >
-                            {isPaid ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                            {isPaid ? "Paga" : "Pendente"}
-                          </Badge>
-                        </div>
-                      </button>
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <CategoryIcon name={categoryName} icon={categoryIcon} size="sm" className="mt-0.5" />
+                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openDetail(e)}>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold">{e.expense.title}</p>
+                            {e.expense.attachmentUrl ? <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground">{new Date(e.expense.date).toLocaleDateString("pt-BR")}</span>
+                            {e.expense.category ? <span className="text-[11px] text-muted-foreground">{e.expense.category}</span> : null}
+                            <Badge
+                              variant="outline"
+                              className={`rounded-full text-[11px] border ${
+                                isPaid
+                                  ? "bg-success/15 text-success border-success/25"
+                                  : "bg-warning/15 text-warning border-warning/25"
+                              }`}
+                            >
+                              {isPaid ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                              {isPaid ? "Paga" : "Pendente"}
+                            </Badge>
+                          </div>
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <div className="text-right">
-                          <p className="text-sm font-semibold">{formatCents(e.expense.amount)}</p>
+                          <p className={`font-display tabular-nums text-sm font-semibold tracking-tight ${amountTone}`}>{formatCents(e.expense.amount)}</p>
                           <p className="text-[11px] text-muted-foreground">valor</p>
                         </div>
                         {isMobile ? (
@@ -932,7 +978,9 @@ export default function SharedExpenses() {
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   {(categoriesQuery.data || []).map((c: any) => (
-                    <SelectItem key={c.id} value={c.name}>{c.icon ? `${c.icon} ` : ""}{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.name}>
+                      <CategoryOption name={c.name} icon={c.icon || undefined} />
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1310,7 +1358,9 @@ export default function SharedExpenses() {
                   <SelectContent>
                     <SelectItem value="none">Sem</SelectItem>
                     {(categoriesQuery.data || []).map((c: any) => (
-                      <SelectItem key={c.id} value={c.name}>{c.icon ? `${c.icon} ` : ""}{c.name}</SelectItem>
+                      <SelectItem key={c.id} value={c.name}>
+                        <CategoryOption name={c.name} icon={c.icon || undefined} />
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1498,7 +1548,7 @@ export default function SharedExpenses() {
                           </div>
 
                           <div className="text-right">
-                            <p className="text-lg font-semibold leading-none">{formatCents(expense.amount)}</p>
+                            <p className="font-display tabular-nums text-lg font-semibold leading-none tracking-tight">{formatCents(expense.amount)}</p>
                             <p className="mt-1 text-[11px] text-muted-foreground">total</p>
                           </div>
                         </div>
@@ -1552,7 +1602,7 @@ export default function SharedExpenses() {
                             <p className="text-xs text-muted-foreground">Quem desembolsou</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold">{formatCents(expense.amount)}</p>
+                            <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{formatCents(expense.amount)}</p>
                             <p className="text-[11px] text-muted-foreground">valor</p>
                           </div>
                         </div>
@@ -1599,7 +1649,7 @@ export default function SharedExpenses() {
                                 </div>
 
                                 <div className="text-right">
-                                  <p className="text-sm font-semibold">{formatCents(s.split.amount)}</p>
+                                  <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{formatCents(s.split.amount)}</p>
                                   <p className="text-[11px] text-muted-foreground">cota</p>
                                   {canMarkThisSplit ? (
                                     <Button

@@ -296,6 +296,42 @@ export const appRouter = router({
         return { count, totalAmount };
       }),
 
+    // Totais por categoria (mês/ano) em todos os grupos do usuário.
+    // Usado no dashboard para donut chart sem puxar todas as despesas no client.
+    monthCategoryTotalsForUser: protectedProcedure
+      .input(
+        z.object({
+          year: z.number().int(),
+          month: z.number().int().min(1).max(12),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const groups = await db.getUserGroups(ctx.user.id!);
+        const totals = new Map<string, number>();
+
+        const monthIndex = input.month - 1;
+
+        for (const g of groups) {
+          const list = await db.getGroupSharedExpenses(g.group.id);
+          for (const item of list as any[]) {
+            const expense = item?.expense;
+            if (!expense) continue;
+            const rawDate = expense.date;
+            const d = rawDate instanceof Date ? rawDate : new Date(rawDate as any);
+            if (Number.isNaN(d.getTime())) continue;
+            if (d.getFullYear() !== input.year || d.getMonth() !== monthIndex) continue;
+
+            const category = String(expense.category || "Sem categoria").trim() || "Sem categoria";
+            const amt = Number(expense.amount) || 0;
+            totals.set(category, (totals.get(category) || 0) + amt);
+          }
+        }
+
+        return Array.from(totals.entries())
+          .map(([category, amount]) => ({ category, amount }))
+          .sort((a, b) => b.amount - a.amount);
+      }),
+
     getById: protectedProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ ctx, input }) => {
@@ -1018,16 +1054,24 @@ export const appRouter = router({
       .input(z.object({
         startDate: z.date().optional(),
         endDate: z.date().optional(),
+        groupId: z.string().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         // grupos do usuário
         const groups = await db.getUserGroups(ctx.user.id!);
         const groupIds = groups.map(g => g.group.id);
+
+        const selectedGroupId = input?.groupId;
+        if (selectedGroupId && !groupIds.includes(selectedGroupId)) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const targetGroupIds = selectedGroupId ? [selectedGroupId] : groupIds;
         // despesas pessoais (com range opcional)
         const personal = await db.getUserPersonalExpenses(ctx.user.id!, input?.startDate, input?.endDate);
         // despesas compartilhadas agregadas
         let shared: any[] = [];
-        for (const gid of groupIds) {
+        for (const gid of targetGroupIds) {
           const list = await db.getGroupSharedExpenses(gid);
           // aplicar filtro de data se informado
           const filtered = list.filter(item => {

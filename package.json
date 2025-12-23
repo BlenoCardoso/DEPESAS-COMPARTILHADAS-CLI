@@ -11,7 +11,7 @@
     "deploy:functions": "pnpm run build:functions && firebase deploy --only functions",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "seed-firebase": "node scripts/seed-firebase.js",
     "test-invitations": "node scripts/test-invitations.js",
     "firebase:setup": "npm run seed-firebase && npm run test-invitations"

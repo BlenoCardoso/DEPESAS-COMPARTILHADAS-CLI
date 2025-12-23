@@ -73,7 +73,7 @@ export default function DashboardLayout({
               </div>
             </div>
             <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">{APP_TITLE}</h1>
+              <h1 className="font-display text-2xl font-bold tracking-tight">{APP_TITLE}</h1>
               <p className="text-sm text-muted-foreground">
                 Entre para continuar
               </p>
@@ -195,7 +195,7 @@ function DashboardLayoutContent({
                       className="h-8 w-8 rounded-md object-cover ring-1 ring-border shrink-0"
                       alt="Logo"
                     />
-                    <span className="font-semibold tracking-tight truncate">
+                    <span className="font-display font-semibold tracking-tight truncate">
                       {APP_TITLE}
                     </span>
                   </div>
@@ -281,7 +281,7 @@ function DashboardLayoutContent({
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
+                  <span className="font-display tracking-tight text-foreground">
                     {activeMenuItem?.label ?? APP_TITLE}
                   </span>
                 </div>

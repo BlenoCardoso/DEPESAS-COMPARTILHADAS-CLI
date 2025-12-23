@@ -15,7 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { Bell, Loader2, LogIn, MoreVertical, Plus, Trash2, Users, MailPlus, Settings } from "lucide-react";
+import { Bell, Loader2, LogIn, MoreVertical, Plus, Star, Trash2, Users, MailPlus, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -136,64 +136,113 @@ export default function Groups() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <h1 className="text-2xl font-semibold sm:text-3xl">Grupos</h1>
-          <p className="text-xs text-muted-foreground">
-            {currentGroup ? (
-              <span className="truncate">Ativo: {currentGroup.name}</span>
-            ) : (
-              "Selecione um grupo para começar."
-            )}
-          </p>
-        </div>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-primary text-primary-foreground shadow-sm">
+        <div className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm/5 text-primary-foreground/85">Gestão de grupos</p>
+              <p className="font-display mt-1 text-2xl font-semibold tracking-tight leading-tight">Grupos</p>
+              <p className="mt-1 text-xs text-primary-foreground/80 truncate">
+                {currentGroup ? `Ativo: ${currentGroup.name}` : "Selecione um grupo para começar."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/settings">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="interactive-tap h-10 w-10 rounded-2xl text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                  aria-label="Configurações"
+                >
+                  <Settings className="h-5 w-5" />
+                </Button>
+              </Link>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="interactive-tap gap-2 rounded-2xl hidden sm:inline-flex">
-              <Plus className="h-4 w-4" />
-              Novo
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Criar Novo Grupo</DialogTitle>
-              <DialogDescription>
-                Compartilhe despesas com amigos, família ou colegas
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome do Grupo *</Label>
-                <Input
-                  id="name"
-                  placeholder="Ex: Apartamento, Viagem, etc."
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Descrição (opcional)</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Descreva o propósito do grupo..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                />
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    className="interactive-tap h-10 w-10 rounded-2xl bg-primary-foreground/10 text-primary-foreground ring-1 ring-primary-foreground/15 hover:bg-primary-foreground/15"
+                    aria-label="Criar novo grupo"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Criar Novo Grupo</DialogTitle>
+                    <DialogDescription>
+                      Compartilhe despesas com amigos, família ou colegas
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nome do Grupo *</Label>
+                      <Input
+                        id="name"
+                        placeholder="Ex: Apartamento, Viagem, etc."
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Descrição (opcional)</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Descreva o propósito do grupo..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                      {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      Criar Grupo
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-primary-foreground/75">Grupos ativos</p>
+                  <p className="font-display tabular-nums mt-1 text-lg font-semibold tracking-tight">
+                    {groupsList.length}
+                  </p>
+                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
+                  <Users className="h-4 w-4" />
+                </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Criar Grupo
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+
+            <div className="rounded-2xl bg-primary-foreground/10 p-3 ring-1 ring-primary-foreground/15">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-primary-foreground/75">Selecionado</p>
+                  <p className="mt-1 truncate text-sm font-semibold">
+                    {currentGroup?.name ?? "—"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-primary-foreground/75">
+                    {currentGroup ? `${selectedMembersCount} membro${selectedMembersCount === 1 ? "" : "s"}` : "—"}
+                  </p>
+                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
+                  <Star className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <Accordion type="single" collapsible defaultValue={isMobile ? undefined : "summary"}>
@@ -208,8 +257,8 @@ export default function Groups() {
             <div className="grid grid-cols-3 gap-2">
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-4">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{groupsList.length}</p>
+                  <p className="text-xs text-muted-foreground">Ativos</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{groupsList.length}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
@@ -221,7 +270,7 @@ export default function Groups() {
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">Membros</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">
                     {currentGroup ? selectedMembersCount : "—"}
                   </p>
                 </CardContent>
@@ -258,9 +307,15 @@ export default function Groups() {
                   {pendingInvitesCount > 0 ? `${pendingInvitesCount} pendente${pendingInvitesCount > 1 ? "s" : ""}` : "Nenhum pendente"}
                 </p>
               </div>
-              <Button size="sm" variant="outline" className="rounded-2xl" aria-label="Ver convites">
-                Ver
-              </Button>
+              {pendingInvitesCount > 0 ? (
+                <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                  {pendingInvitesCount} novo{pendingInvitesCount === 1 ? "" : "s"}
+                </span>
+              ) : (
+                <Button size="sm" variant="outline" className="rounded-2xl" aria-label="Ver convites">
+                  Ver
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -292,6 +347,7 @@ export default function Groups() {
           <EmptyState
             title="Nenhum grupo encontrado"
             description="Crie seu primeiro grupo para começar a dividir despesas."
+            icon={<Users className="h-10 w-10" />}
             cta={
               <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -313,6 +369,7 @@ export default function Groups() {
             const stats = statsByGroupId.get(item.group.id) as any | undefined;
             const membersCount = stats?.membersCount;
             const pendingCount = stats?.pendingExpensesCount;
+            const expensesCount = stats?.expensesCount;
             return (
               <motion.div
                 key={item.group.id}
@@ -343,6 +400,7 @@ export default function Groups() {
                         </div>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
                           {typeof membersCount === "number" ? `${membersCount} membro${membersCount === 1 ? "" : "s"}` : "Membros"}
+                          {typeof expensesCount === "number" ? ` • ${expensesCount} despesa${expensesCount === 1 ? "" : "s"}` : ""}
                           {typeof pendingCount === "number" ? ` • ${pendingCount} pendente${pendingCount === 1 ? "" : "s"}` : ""}
                         </p>
                       </div>
@@ -485,14 +543,19 @@ export default function Groups() {
       </Drawer>
 
       <BodyPortal>
-        <Button
-          className="md:hidden fixed right-4 z-50 h-12 w-12 rounded-full p-0 shadow-sm"
+        <div
+          className="md:hidden fixed left-0 right-0 z-50 px-4"
           style={{ bottom: "calc(var(--safe-area-bottom) + var(--bottom-nav-height) + 12px)" }}
-          onClick={() => setIsCreateOpen(true)}
-          aria-label="Criar novo grupo"
         >
-          <Plus className="h-5 w-5" />
-        </Button>
+          <Button
+            className="w-full rounded-2xl h-12"
+            onClick={() => setIsCreateOpen(true)}
+            aria-label="Criar novo grupo"
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Criar Novo Grupo
+          </Button>
+        </div>
       </BodyPortal>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

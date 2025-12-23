@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { trpc } from "@/lib/trpc";
 import { Edit2, Folder, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { CategoryIcon } from "@/components/CategoryVisual";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -246,7 +247,7 @@ export default function ExpenseCategories() {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex items-center gap-3 p-3 rounded-2xl border bg-card"
                     >
-                      <span className="text-2xl">{category.icon}</span>
+                      <CategoryIcon name={category.name} icon={category.icon} size="md" />
                       <span className="font-medium flex-1">{category.name}</span>
                       <Badge variant="secondary">Sistema</Badge>
                     </motion.div>
@@ -284,7 +285,7 @@ export default function ExpenseCategories() {
                         animate={{ opacity: 1, y: 0 }}
                         className="flex items-center gap-3 p-3 rounded-2xl border bg-card hover:border-primary/50 transition-colors"
                       >
-                        <span className="text-2xl">{category.icon || "📦"}</span>
+                        <CategoryIcon name={category.name} icon={category.icon || "📦"} size="md" />
                         <span className="font-medium flex-1">{category.name}</span>
                         <div className="flex items-center gap-1">
                           <Button

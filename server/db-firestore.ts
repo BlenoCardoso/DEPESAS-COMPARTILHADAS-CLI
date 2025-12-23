@@ -153,6 +153,7 @@ export async function getUserGroupStats(userId: string) {
 
   const membersCountByGroupId = new Map<string, number>();
   const pendingExpensesCountByGroupId = new Map<string, number>();
+  const expensesCountByGroupId = new Map<string, number>();
 
   const chunkSize = 10;
   for (let i = 0; i < groupIds.length; i += chunkSize) {
@@ -183,25 +184,37 @@ export async function getUserGroupStats(userId: string) {
     }
   }
 
+  // Total de despesas por grupo (query agregada por grupo para evitar ler documentos)
+  await Promise.all(
+    groupIds.map(async (groupId) => {
+      const snap = await db.collection("sharedExpenses").where("groupId", "==", groupId).count().get();
+      const count = Number(snap.data().count ?? 0);
+      expensesCountByGroupId.set(groupId, count);
+    })
+  );
+
   return groupIds.map((groupId) => ({
     groupId,
     membersCount: membersCountByGroupId.get(groupId) ?? 0,
     pendingExpensesCount: pendingExpensesCountByGroupId.get(groupId) ?? 0,
+    expensesCount: expensesCountByGroupId.get(groupId) ?? 0,
   }));
 }
 
 export async function getGroupStats(groupId: string) {
   const db = adminDb();
 
-  const [membersSnap, pendingSnap] = await Promise.all([
+  const [membersSnap, pendingSnap, expensesCountSnap] = await Promise.all([
     db.collection("groupMembers").where("groupId", "==", groupId).get(),
     db.collection("sharedExpenses").where("groupId", "==", groupId).where("status", "==", "pending").get(),
+    db.collection("sharedExpenses").where("groupId", "==", groupId).count().get(),
   ]);
 
   return {
     groupId,
     membersCount: membersSnap.size,
     pendingExpensesCount: pendingSnap.size,
+    expensesCount: Number(expensesCountSnap.data().count ?? 0),
   };
 }
 

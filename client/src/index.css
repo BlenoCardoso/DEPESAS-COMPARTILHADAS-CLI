@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Maven+Pro:wght@500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -44,7 +44,9 @@
 }
 
 :root {
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Maven Pro', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-feature-settings: 'ss01' 1, 'salt' 1;
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
@@ -68,24 +70,24 @@
   --popover: #FFFFFF;
   --popover-foreground: var(--foreground);
   /* Fintech palette */
-  --primary: #0F766E;
+  --primary: #6D28D9;
   --primary-foreground: #FFFFFF;
-  --secondary: #CCFBF1;
-  --secondary-foreground: #134E4A;
+  --secondary: #EDE9FE;
+  --secondary-foreground: #4C1D95;
   --muted: #EEF2F6;
   --muted-foreground: #334155;
   --accent: var(--primary);
   --accent-foreground: var(--primary-foreground);
-  --destructive: #DC2626;
+  --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
   --border: #E2E8F0;
   --input: #E2E8F0;
   --ring: var(--primary);
-  --chart-1: #0F766E;
-  --chart-2: #134E4A;
-  --chart-3: #0EA5A4;
-  --chart-4: #10B981;
-  --chart-5: #EF4444;
+  --chart-1: #6D28D9;
+  --chart-2: #9333EA;
+  --chart-3: #3B82F6;
+  --chart-4: #22C55E;
+  --chart-5: #F59E0B;
   --sidebar: #FFFFFF;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -94,11 +96,11 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-  --success: #16A34A;
+  --success: #22C55E;
   --success-foreground: #052E16;
   --warning: #F59E0B;
   --warning-foreground: #0F172A;
-  --info: #2563EB;
+  --info: #3B82F6;
   --info-foreground: #0B1020;
 }
 
@@ -110,33 +112,33 @@
   --card-foreground: var(--foreground);
   --popover: oklch(0.18 0.015 250);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.72 0.1 175);
-  --primary-foreground: oklch(0.12 0.02 250);
-  --secondary: oklch(0.24 0.03 175);
+  --primary: #A78BFA;
+  --primary-foreground: #1F1238;
+  --secondary: #2E1065;
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.28 0.02 250);
   --muted-foreground: oklch(0.79 0.03 250);
   --accent: var(--primary);
   --accent-foreground: var(--primary-foreground);
-  --destructive: oklch(0.52 0.13 22);
-  --destructive-foreground: oklch(0.97 0.01 80);
+  --destructive: #F87171;
+  --destructive-foreground: #1F0A0A;
   --border: oklch(0.33 0.02 250);
   --input: oklch(0.33 0.02 250);
   --ring: var(--primary);
-  --chart-1: oklch(0.75 0.09 165);
-  --chart-2: oklch(0.72 0.09 175);
-  --chart-3: oklch(0.7 0.08 205);
-  --chart-4: oklch(0.7 0.1 145);
-  --chart-5: oklch(0.78 0.09 20);
+  --chart-1: #A78BFA;
+  --chart-2: #C084FC;
+  --chart-3: #60A5FA;
+  --chart-4: #34D399;
+  --chart-5: #FBBF24;
   --sidebar: oklch(0.18 0.02 250);
   --sidebar-foreground: var(--foreground);
   --sidebar-accent: oklch(0.24 0.02 250);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: oklch(0.32 0.02 250);
   --sidebar-ring: var(--ring);
-  --success: oklch(0.68 0.11 155);
-  --warning: oklch(0.72 0.14 85);
-  --info: oklch(0.74 0.08 220);
+  --success: #34D399;
+  --warning: #FBBF24;
+  --info: #60A5FA;
 }
 
 @layer base {
@@ -162,9 +164,45 @@
     background: var(--background);
     color: var(--foreground);
     line-height: 1.6;
+    font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 1.125rem;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+
+  h4,
+  h5,
+  h6 {
+    line-height: 1.4;
+    font-weight: 600;
   }
 
   html.native,
@@ -267,7 +305,7 @@
   @media (max-width: 480px) {
     :root {
       --bottom-nav-height: 3.5rem;
-      --grid-gap: 0.9rem;
+      --grid-gap: 1rem;
       --motion-fast: 120ms;
       --motion-medium: 180ms;
     }
@@ -336,6 +374,14 @@
 }
 
 @layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+
   .safe-area-top {
     padding-top: var(--safe-area-top);
   }

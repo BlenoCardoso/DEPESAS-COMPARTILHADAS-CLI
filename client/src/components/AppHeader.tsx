@@ -8,16 +8,21 @@ export function AppHeader({
   left,
   right,
   className,
+  variant = "default",
 }: {
   title: string;
   left: ReactNode;
   right: ReactNode;
   className?: string;
+  variant?: "default" | "solid";
 }) {
   return (
     <header
       className={cn(
-        "shrink-0 z-40 bg-background/85 backdrop-blur-xl border-b border-border/70",
+        "shrink-0 z-40 border-b",
+        variant === "solid"
+          ? "bg-primary text-primary-foreground border-transparent"
+          : "bg-background/85 backdrop-blur-xl border-border/70",
         className
       )}
     >
@@ -31,14 +36,29 @@ export function AppHeader({
                 <img
                   src={APP_LOGO}
                   alt={APP_TITLE}
-                  className="h-9 w-9 rounded-full object-cover ring-1 ring-border shrink-0"
+                  className={cn(
+                    "h-9 w-9 rounded-full object-cover ring-1 shrink-0",
+                    variant === "solid" ? "ring-primary-foreground/20" : "ring-border"
+                  )}
                 />
               ) : (
-                <div className="h-9 w-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-semibold ring-1 ring-border shrink-0">
+                <div
+                  className={cn(
+                    "h-9 w-9 rounded-full flex items-center justify-center text-sm font-semibold ring-1 shrink-0",
+                    variant === "solid"
+                      ? "bg-primary-foreground/10 text-primary-foreground ring-primary-foreground/20"
+                      : "bg-primary/15 text-primary ring-border"
+                  )}
+                >
                   DC
                 </div>
               )}
-              <span className="min-w-0 truncate text-[1.05rem] font-semibold leading-none tracking-tight text-foreground">
+              <span
+                className={cn(
+                  "font-display min-w-0 truncate text-[1.05rem] font-semibold leading-none tracking-tight",
+                  variant === "solid" ? "text-primary-foreground" : "text-foreground"
+                )}
+              >
                 {title}
               </span>
             </div>

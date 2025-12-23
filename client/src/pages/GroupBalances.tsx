@@ -118,7 +118,7 @@ export default function GroupBalances() {
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Saldos do Grupo</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Saldos do Grupo</h1>
         <p className="text-sm text-muted-foreground">
           Veja quem deve a quem e registre acertos de contas
         </p>
@@ -159,7 +159,7 @@ export default function GroupBalances() {
                     <TrendingDown className="h-5 w-5 text-destructive" />
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">A pagar</p>
-                      <p className="text-lg font-bold text-destructive">{formatCents(totalOwed)}</p>
+                      <p className="font-display tabular-nums text-lg font-bold tracking-tight text-destructive">{formatCents(totalOwed)}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -171,7 +171,7 @@ export default function GroupBalances() {
                     <TrendingUp className="h-5 w-5 text-green-600" />
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">A receber</p>
-                      <p className="text-lg font-bold text-green-600">{formatCents(totalToReceive)}</p>
+                      <p className="font-display tabular-nums text-lg font-bold tracking-tight text-green-600">{formatCents(totalToReceive)}</p>
                     </div>
                   </div>
                 </CardContent>

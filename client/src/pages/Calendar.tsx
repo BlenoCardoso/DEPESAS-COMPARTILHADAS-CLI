@@ -143,7 +143,7 @@ export default function Calendar() {
       <div className="space-y-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold sm:text-3xl">Calendário</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Calendário</h1>
             <p className="text-sm text-muted-foreground">Organize eventos por data e hora.</p>
           </div>
           <Badge
@@ -198,19 +198,19 @@ export default function Calendar() {
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.total}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.total}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Hoje</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.today}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.today}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Próximos</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.upcoming}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.upcoming}</p>
                 </CardContent>
               </Card>
             </div>

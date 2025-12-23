@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, CheckSquare, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -148,7 +148,7 @@ export default function Tasks() {
                 <Card key={stat.label} className="rounded-2xl border bg-card shadow-sm">
                   <CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">{stat.label}</p>
-                    <p className="mt-1 text-2xl font-bold leading-none">{stat.value}</p>
+                    <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stat.value}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -281,6 +281,7 @@ export default function Tasks() {
           <EmptyState
             title="Nenhuma tarefa"
             description={tasksList.length === 0 ? "Crie sua primeira tarefa." : "Nenhuma tarefa com esses filtros."}
+            icon={<CheckSquare className="h-10 w-10" />}
             cta={<Button onClick={() => setIsCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Criar primeira</Button>}
           />
         </PageContainer>

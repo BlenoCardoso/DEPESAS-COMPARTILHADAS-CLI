@@ -121,7 +121,7 @@ export default function Invitations() {
         <EmptyState
           title={view === "received" ? "Nenhum convite recebido" : "Nenhum convite enviado"}
           description={view === "received" ? "Você não tem convites no momento." : "Você ainda não enviou convites."}
-          icon={<MailCheck className="h-6 w-6" />}
+          icon={view === "received" ? <MailCheck className="h-10 w-10" /> : <MailX className="h-10 w-10" />}
         />
       ) : (
         <div className="space-y-2">

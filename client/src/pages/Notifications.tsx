@@ -47,31 +47,32 @@ const NotificationEmptyIllustration = () => (
   <svg viewBox="0 0 220 170" role="img" aria-hidden="true" className="mx-auto h-36 w-48">
     <defs>
       <linearGradient id="notifGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#7C5DFA" stopOpacity="0.65" />
-        <stop offset="100%" stopColor="#FF8F70" stopOpacity="0.65" />
+        <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.65" />
+        <stop offset="100%" stopColor="var(--chart-5)" stopOpacity="0.65" />
       </linearGradient>
       <linearGradient id="notifGlow" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#42C5C0" stopOpacity="0.35" />
-        <stop offset="100%" stopColor="#42C5C0" stopOpacity="0" />
+        <stop offset="0%" stopColor="var(--info)" stopOpacity="0.22" />
+        <stop offset="100%" stopColor="var(--info)" stopOpacity="0" />
       </linearGradient>
     </defs>
     <ellipse cx="110" cy="150" rx="70" ry="16" fill="url(#notifGlow)" />
     <rect x="36" y="32" width="148" height="96" rx="26" fill="url(#notifGradient)" opacity="0.18" />
-    <rect x="26" y="44" width="148" height="96" rx="24" fill="#ffffff" stroke="#f1f0ff" strokeWidth="2" />
+    <rect x="26" y="44" width="148" height="96" rx="24" fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
     <path
       d="M150 97H50l9-12v-10c0-17.673 14.327-32 32-32s32 14.327 32 32v10l9 12z"
-      fill="#f5f2ff"
-      stroke="#c6b7ff"
+      fill="var(--secondary)"
+      stroke="var(--primary)"
+      strokeOpacity="0.35"
       strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <circle cx="91" cy="115" r="10" fill="#7C5DFA" opacity="0.9" />
-    <circle cx="91" cy="115" r="4" fill="#ffffff" />
-    <path d="M110 45a8 8 0 0 0-8-8" stroke="#7C5DFA" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="176" cy="54" r="6" fill="#FFB892" opacity="0.6" />
-    <circle cx="54" cy="46" r="4" fill="#42C5C0" opacity="0.5" />
-    <circle cx="184" cy="108" r="3" fill="#7C5DFA" opacity="0.5" />
+    <circle cx="91" cy="115" r="10" fill="var(--primary)" opacity="0.85" />
+    <circle cx="91" cy="115" r="4" fill="var(--card)" />
+    <path d="M110 45a8 8 0 0 0-8-8" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" />
+    <circle cx="176" cy="54" r="6" fill="var(--warning)" opacity="0.55" />
+    <circle cx="54" cy="46" r="4" fill="var(--info)" opacity="0.35" />
+    <circle cx="184" cy="108" r="3" fill="var(--primary)" opacity="0.35" />
   </svg>
 );
 

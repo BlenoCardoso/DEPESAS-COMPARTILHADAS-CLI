@@ -4,13 +4,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
-import { Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Clock, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -98,7 +99,7 @@ export default function Reminders() {
       <div className="space-y-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold sm:text-3xl">Lembretes</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Lembretes</h1>
             <p className="text-sm text-muted-foreground">Organize lembretes por data e hora.</p>
           </div>
           <Badge
@@ -153,19 +154,19 @@ export default function Reminders() {
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.total}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.total}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Hoje</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.today}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.today}</p>
                 </CardContent>
               </Card>
               <Card className="rounded-2xl border bg-card shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground">Próximos</p>
-                  <p className="mt-1 text-2xl font-bold leading-none">{stats.upcoming}</p>
+                  <p className="font-display tabular-nums mt-1 text-2xl font-bold leading-none tracking-tight">{stats.upcoming}</p>
                 </CardContent>
               </Card>
             </div>
@@ -253,6 +254,7 @@ export default function Reminders() {
           <EmptyState
             title="Nenhum lembrete"
             description="Crie seu primeiro lembrete."
+            icon={<Clock className="h-10 w-10" />}
             cta={
               <Button onClick={() => setIsCreateOpen(true)} className="gap-2 rounded-2xl">
                 <Plus className="h-4 w-4" />
@@ -268,6 +270,7 @@ export default function Reminders() {
               <EmptyState
                 title="Nada por aqui"
                 description="Nenhum lembrete com esses filtros."
+                icon={<Clock className="h-10 w-10" />}
                 cta={
                   <Button
                     variant="outline"
