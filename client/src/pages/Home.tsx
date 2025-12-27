@@ -2,17 +2,19 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Progress } from "@/components/ui/progress";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { APP_TITLE } from "@/const";
+import { APP_LOGO, APP_TITLE } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { formatCents } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { CreditCard, PieChart, Plus, Users, Wallet, Bell, ArrowRightLeft, BarChart3, Loader2 } from "lucide-react";
 import { PieChart as RePieChart, Pie, Cell } from "recharts";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 
 function asDate(value: unknown): Date | null {
@@ -28,12 +30,93 @@ function isInMonth(value: unknown, year: number, monthIndex: number) {
   return d.getFullYear() === year && d.getMonth() === monthIndex;
 }
 
+type CategoryReportScope = "all" | "personal" | "shared";
+
+const HOME_CATEGORY_SCOPE_KEY = "home.categoryReport.scope";
+const HOME_CATEGORY_MONTH_KEY = "home.categoryReport.month";
+
 export default function Home() {
   const { user, loading, isAuthenticated, loginWithGoogle } = useAuth();
   const isMobile = useIsMobile();
+  const [, navigate] = useLocation();
   const [homeView, setHomeView] = useState<"summary" | "actions">("summary");
+  const [onboardingApi, setOnboardingApi] = useState<CarouselApi | null>(null);
+  const [onboardingIndex, setOnboardingIndex] = useState(0);
+  const [onboardingCount, setOnboardingCount] = useState(0);
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const groupId = currentGroup?.id ?? null;
+  const [categoryScope, setCategoryScope] = useState<CategoryReportScope>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem(HOME_CATEGORY_SCOPE_KEY) : null;
+      if (raw === "all" || raw === "personal" || raw === "shared") return raw;
+      return "all";
+    } catch {
+      return "all";
+    }
+  });
+
+  const [categoryChooserOpen, setCategoryChooserOpen] = useState(false);
+  const [pendingCategoryName, setPendingCategoryName] = useState<string>("");
+
+  const [categoryReportMonth, setCategoryReportMonth] = useState<string>(() => {
+    try {
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const fallback = `${now.getFullYear()}-${mm}`;
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem(HOME_CATEGORY_MONTH_KEY) : null;
+      if (!raw) return fallback;
+      // Esperado: YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(raw)) return raw;
+      return fallback;
+    } catch {
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      return `${now.getFullYear()}-${mm}`;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HOME_CATEGORY_SCOPE_KEY, categoryScope);
+    } catch {
+      // ignore
+    }
+  }, [categoryScope]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HOME_CATEGORY_MONTH_KEY, categoryReportMonth);
+    } catch {
+      // ignore
+    }
+  }, [categoryReportMonth]);
+
+  const onboardingSlides = useMemo(
+    () =>
+      [
+        {
+          title: "O jeito mais fácil de organizar despesas",
+          description: "Crie grupos, registre contas e acompanhe quem deve o quê — tudo em um só lugar.",
+          icon: Users,
+        },
+        {
+          title: "Divida gastos compartilhados",
+          description: "Rateio automático por pessoa e histórico completo das despesas do grupo.",
+          icon: ArrowRightLeft,
+        },
+        {
+          title: "Controle também suas despesas pessoais",
+          description: "Registre gastos do dia a dia e acompanhe seus totais do mês.",
+          icon: Wallet,
+        },
+        {
+          title: "Lembretes e notificações",
+          description: "Receba avisos importantes para não esquecer contas e movimentações.",
+          icon: Bell,
+        },
+      ] as const,
+    []
+  );
 
   // Queries com cache otimizado (5 minutos de staleTime)
   const { data: groups, isLoading: groupsLoading } = trpc.groups.list.useQuery(undefined, {
@@ -50,6 +133,25 @@ export default function Home() {
       setCurrentGroupId(groupsList[0].group.id);
     }
   }, [groupId, groupsList, isAuthenticated, setCurrentGroupId]);
+
+  useEffect(() => {
+    if (!onboardingApi) return;
+
+    setOnboardingCount(onboardingApi.scrollSnapList().length);
+    setOnboardingIndex(onboardingApi.selectedScrollSnap());
+
+    const onSelect = () => {
+      setOnboardingIndex(onboardingApi.selectedScrollSnap());
+    };
+
+    onboardingApi.on("select", onSelect);
+    onboardingApi.on("reInit", onSelect);
+
+    return () => {
+      onboardingApi.off("select", onSelect);
+      onboardingApi.off("reInit", onSelect);
+    };
+  }, [onboardingApi]);
 
   const { data: unreadCount, isLoading: unreadLoading } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -80,15 +182,31 @@ export default function Home() {
   const currentYear = now.getFullYear();
   const currentMonthIndex = now.getMonth();
 
-  const { data: sharedMonthCategoryTotals, isLoading: sharedMonthTotalsLoading } =
-    trpc.sharedExpenses.monthCategoryTotalsForUser.useQuery(
-      { year: currentYear, month: currentMonthIndex + 1 },
-      {
-        enabled: Boolean(isAuthenticated),
-        staleTime: 5 * 60 * 1000,
-        gcTime: 10 * 60 * 1000,
-      }
-    );
+  const reportMonthParts = useMemo(() => {
+    const [yy, mm] = String(categoryReportMonth || "").split("-");
+    const year = parseInt(yy || "", 10);
+    const month = parseInt(mm || "", 10);
+    if (!year || !month) return { year: currentYear, monthIndex: currentMonthIndex };
+    return { year, monthIndex: month - 1 };
+  }, [categoryReportMonth, currentMonthIndex, currentYear]);
+
+  const reportMonthLabel = useMemo(() => {
+    try {
+      const d = new Date(reportMonthParts.year, reportMonthParts.monthIndex, 1);
+      return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    } catch {
+      return "Mês selecionado";
+    }
+  }, [reportMonthParts.monthIndex, reportMonthParts.year]);
+
+  const { data: sharedMonthCategoryTotals, isLoading: sharedMonthTotalsLoading } = trpc.sharedExpenses.monthCategoryTotals.useQuery(
+    { groupId: groupId!, year: reportMonthParts.year, month: reportMonthParts.monthIndex + 1 },
+    {
+      enabled: Boolean(isAuthenticated && groupId),
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    }
+  );
 
   const balancesQuery = trpc.settlements.calculateBalances.useQuery(
     { groupId: groupId! },
@@ -106,8 +224,8 @@ export default function Home() {
 
   const personalMonthExpenses = useMemo(() => {
     const list = Array.isArray(personalExpenses) ? personalExpenses : [];
-    return list.filter((e: any) => isInMonth(e?.date, currentYear, currentMonthIndex));
-  }, [currentMonthIndex, currentYear, personalExpenses]);
+    return list.filter((e: any) => isInMonth(e?.date, reportMonthParts.year, reportMonthParts.monthIndex));
+  }, [personalExpenses, reportMonthParts.monthIndex, reportMonthParts.year]);
 
   const personalMonthTotal = personalMonthExpenses.reduce((sum: number, e: any) => sum + (Number(e?.amount) || 0), 0);
   const sharedMonthTotal = useMemo(() => {
@@ -130,15 +248,19 @@ export default function Home() {
   const categoryBreakdown = useMemo(() => {
     const totals = new Map<string, number>();
 
-    for (const e of personalMonthExpenses as any[]) {
-      const name = String(e?.category || "Sem categoria").trim() || "Sem categoria";
-      totals.set(name, (totals.get(name) || 0) + (Number(e?.amount) || 0));
+    if (categoryScope === "all" || categoryScope === "personal") {
+      for (const e of personalMonthExpenses as any[]) {
+        const name = String(e?.category || "Sem categoria").trim() || "Sem categoria";
+        totals.set(name, (totals.get(name) || 0) + (Number(e?.amount) || 0));
+      }
     }
 
-    const sharedList = Array.isArray(sharedMonthCategoryTotals) ? sharedMonthCategoryTotals : [];
-    for (const item of sharedList as any[]) {
-      const name = String(item?.category || "Sem categoria").trim() || "Sem categoria";
-      totals.set(name, (totals.get(name) || 0) + (Number(item?.amount) || 0));
+    if (categoryScope === "all" || categoryScope === "shared") {
+      const sharedList = Array.isArray(sharedMonthCategoryTotals) ? sharedMonthCategoryTotals : [];
+      for (const item of sharedList as any[]) {
+        const name = String(item?.category || "Sem categoria").trim() || "Sem categoria";
+        totals.set(name, (totals.get(name) || 0) + (Number(item?.amount) || 0));
+      }
     }
 
     const sorted = Array.from(totals.entries())
@@ -168,7 +290,7 @@ export default function Home() {
     });
 
     return { data, config };
-  }, [personalMonthExpenses, sharedMonthCategoryTotals]);
+  }, [categoryScope, personalMonthExpenses, sharedMonthCategoryTotals]);
 
   const recentPersonalExpenses = useMemo(() => {
     const list = Array.isArray(personalExpenses) ? [...personalExpenses] : [];
@@ -193,6 +315,49 @@ export default function Home() {
   // Loading state unificado
   const isLoadingData = groupsLoading || personalLoading || sharedLoading || sharedMonthTotalsLoading;
 
+  const categoryReportDescription = useMemo(() => {
+    const base = reportMonthLabel;
+    if (categoryScope === "personal") return `${base} • Pessoais`;
+    if (categoryScope === "shared") {
+      return currentGroup ? `${base} • Compartilhadas (${currentGroup.name})` : `${base} • Compartilhadas`;
+    }
+    // all
+    return currentGroup ? `${base} • Pessoais + Compartilhadas (${currentGroup.name})` : `${base} • Pessoais + Compartilhadas`;
+  }, [categoryScope, currentGroup, reportMonthLabel]);
+
+  const isLoadingCategoryReport = useMemo(() => {
+    const loadingPersonal = personalLoading;
+    const loadingShared = Boolean(groupId) ? sharedMonthTotalsLoading : false;
+    if (categoryScope === "personal") return loadingPersonal;
+    if (categoryScope === "shared") return loadingShared;
+    return loadingPersonal || loadingShared;
+  }, [categoryScope, groupId, personalLoading, sharedMonthTotalsLoading]);
+
+  const categoryReportMonthHref = useMemo(() => encodeURIComponent(categoryReportMonth), [categoryReportMonth]);
+
+  const handleCategorySliceClick = (categoryName: string) => {
+    const cat = String(categoryName || "").trim();
+    if (!cat) return;
+
+    const month = categoryReportMonthHref;
+    const catParam = encodeURIComponent(cat);
+
+    if (categoryScope === "personal") {
+      navigate(`/personal-expenses?month=${month}&category=${catParam}`);
+      return;
+    }
+
+    if (categoryScope === "shared") {
+      if (!groupId) return;
+      navigate(`/shared-expenses?month=${month}&category=${catParam}`);
+      return;
+    }
+
+    // "all": pede escolha entre Pessoais e Compartilhadas
+    setPendingCategoryName(cat);
+    setCategoryChooserOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -203,97 +368,84 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return (
-      <div className="animate-fade-in">
-        <div className="mx-auto w-full max-w-md space-y-4 px-4 py-10">
-          <div className="rounded-3xl border border-border/60 bg-primary px-5 py-6 text-primary-foreground shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 space-y-1">
-                <p className="text-xs uppercase tracking-widest text-primary-foreground/80">Bem-vindo</p>
-                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-4xl">{APP_TITLE}</h1>
-                <p className="text-sm text-primary-foreground/80">Controle despesas compartilhadas e pessoais.</p>
+      <div className="dark min-h-[100dvh] bg-background text-foreground animate-fade-in">
+        <div className="mx-auto w-full max-w-md px-5 py-10">
+          <div className="rounded-3xl border border-border/60 bg-card/80 shadow-sm">
+            <div className="p-5">
+              <Carousel
+                className="w-full"
+                setApi={(api) => setOnboardingApi(api)}
+                opts={{ loop: false }}
+              >
+                <CarouselContent>
+                  {onboardingSlides.map((slide) => {
+                    const Icon = slide.icon;
+                    return (
+                      <CarouselItem key={slide.title}>
+                        <div className="flex flex-col items-center text-center">
+                          <div className="mb-5 flex w-full items-center justify-center">
+                            <div className="flex w-full items-center justify-center rounded-3xl border border-border/60 bg-background/70 p-6">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={APP_LOGO}
+                                  alt={APP_TITLE}
+                                  className="h-12 w-12 rounded-2xl"
+                                  loading="lazy"
+                                />
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <p className="text-xs uppercase tracking-widest text-muted-foreground">{APP_TITLE}</p>
+                          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                            {slide.title}
+                          </h1>
+                          <p className="mt-2 text-sm text-muted-foreground">{slide.description}</p>
+                        </div>
+                      </CarouselItem>
+                    );
+                  })}
+                </CarouselContent>
+              </Carousel>
+
+              <div className="mt-5 flex items-center justify-center gap-2" aria-label="Progresso do onboarding">
+                {Array.from({ length: onboardingCount || onboardingSlides.length }).map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={
+                      "h-2 w-2 rounded-full transition-colors " +
+                      (idx === onboardingIndex ? "bg-primary" : "bg-muted")
+                    }
+                    aria-hidden="true"
+                  />
+                ))}
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-foreground/10 ring-1 ring-primary-foreground/15">
-                <CreditCard className="h-5 w-5" />
+
+              <div className="mt-6 space-y-2">
+                <Button
+                  size="lg"
+                  className="w-full font-semibold"
+                  onClick={loginWithGoogle}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Entrando...</span>
+                    </div>
+                  ) : (
+                    "Cadastrar"
+                  )}
+                </Button>
+                <Button asChild variant="link" className="w-full text-muted-foreground" disabled={loading}>
+                  <Link href="/firebase-login">Já sou cadastrado</Link>
+                </Button>
               </div>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-border/60 bg-card/80 shadow-sm">
-            <div className="p-4">
-              <Accordion type="single" collapsible>
-                <AccordionItem value="features" className="border-none">
-                  <AccordionTrigger className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3 hover:no-underline">
-                    <span className="flex flex-col items-start">
-                      <span className="text-sm font-semibold">Ver recursos</span>
-                      <span className="text-xs text-muted-foreground">Opcional</span>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-3">
-                    <div className="grid grid-cols-2 gap-4 py-2">
-                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                        <Users className="h-8 w-8 text-primary" />
-                        <span className="text-sm font-medium">Grupos</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                        <CreditCard className="h-8 w-8 text-secondary" />
-                        <span className="text-sm font-medium">Despesas</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                        <Wallet className="h-8 w-8 text-accent" />
-                        <span className="text-sm font-medium">Pessoal</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-3">
-                        <PieChart className="h-8 w-8 text-info" />
-                        <span className="text-sm font-medium">Relatórios</span>
-                      </div>
-                    </div>
-
-                    <div className="text-center text-xs text-muted-foreground space-y-1">
-                      <p>Login seguro</p>
-                      <p>Atualização automática</p>
-                      <p>Funciona offline</p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </div>
-          </div>
-
-          <Button
-            size="lg"
-            className="w-full font-semibold"
-            onClick={loginWithGoogle}
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Entrando...</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                <span>Entrar com Google</span>
-              </div>
-            )}
-          </Button>
         </div>
       </div>
     );
@@ -417,10 +569,62 @@ export default function Home() {
           <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Despesas por categoria</CardTitle>
-              <CardDescription className="text-xs">Mês atual • Pessoal + grupo atual (se houver)</CardDescription>
+              <CardDescription className="text-xs">{categoryReportDescription}</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoadingData ? (
+              <div className="mb-3 space-y-2">
+                <ToggleGroup
+                  type="single"
+                  value={categoryScope}
+                  onValueChange={(v) => (v ? setCategoryScope(v as CategoryReportScope) : null)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="all" className="flex-1 rounded-2xl">Todas</ToggleGroupItem>
+                  <ToggleGroupItem value="personal" className="flex-1 rounded-2xl">Pessoais</ToggleGroupItem>
+                  <ToggleGroupItem value="shared" className="flex-1 rounded-2xl" disabled={!groupId}>
+                    Compartilhadas
+                  </ToggleGroupItem>
+                </ToggleGroup>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground">Período</p>
+                    <input
+                      type="month"
+                      value={categoryReportMonth}
+                      onChange={(e) => setCategoryReportMonth(e.target.value)}
+                      className="h-10 w-full rounded-2xl border border-border/60 bg-background/60 px-3 text-sm"
+                      aria-label="Selecionar mês do relatório"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    {categoryScope === "personal" ? (
+                      <Link href={`/personal-expenses?month=${categoryReportMonthHref}`}>
+                        <Button variant="outline" className="w-full rounded-2xl">Ver despesas</Button>
+                      </Link>
+                    ) : categoryScope === "shared" ? (
+                      <Link href={`/shared-expenses?month=${categoryReportMonthHref}`}>
+                        <Button variant="outline" className="w-full rounded-2xl" disabled={!groupId}>Ver despesas</Button>
+                      </Link>
+                    ) : (
+                      <div className="grid w-full grid-cols-2 gap-2">
+                        <Link href={`/personal-expenses?month=${categoryReportMonthHref}`}>
+                          <Button variant="outline" className="w-full rounded-2xl">Pessoais</Button>
+                        </Link>
+                        <Link href={`/shared-expenses?month=${categoryReportMonthHref}`}>
+                          <Button variant="outline" className="w-full rounded-2xl" disabled={!groupId}>Compart.</Button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {!groupId && categoryScope !== "personal" ? (
+                <p className="text-xs text-muted-foreground">Selecione um grupo para ver as despesas compartilhadas.</p>
+              ) : isLoadingCategoryReport ? (
                 <p className="text-xs text-muted-foreground">Carregando…</p>
               ) : categoryBreakdown.data.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Sem dados suficientes para o gráfico.</p>
@@ -428,13 +632,42 @@ export default function Home() {
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
                   <div className="space-y-2">
                     {categoryBreakdown.data.map((item) => (
-                      <div key={item.key} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill as any }} />
-                          <span className="min-w-0 truncate text-sm font-medium">{item.category}</span>
-                        </div>
-                        <span className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.value)}</span>
-                      </div>
+                      categoryScope === "personal" ? (
+                        <Link key={item.key} href={`/personal-expenses?month=${categoryReportMonthHref}&category=${encodeURIComponent(item.category)}`}>
+                          <div className="interactive-card flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill as any }} />
+                              <span className="min-w-0 truncate text-sm font-medium">{item.category}</span>
+                            </div>
+                            <span className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.value)}</span>
+                          </div>
+                        </Link>
+                      ) : categoryScope === "shared" ? (
+                        <Link key={item.key} href={`/shared-expenses?month=${categoryReportMonthHref}&category=${encodeURIComponent(item.category)}`}>
+                          <div className="interactive-card flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill as any }} />
+                              <span className="min-w-0 truncate text-sm font-medium">{item.category}</span>
+                            </div>
+                            <span className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.value)}</span>
+                          </div>
+                        </Link>
+                      ) : (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => handleCategorySliceClick(item.category)}
+                        >
+                          <div className="interactive-card flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill as any }} />
+                            <span className="min-w-0 truncate text-sm font-medium">{item.category}</span>
+                          </div>
+                          <span className="font-display tabular-nums shrink-0 text-sm font-semibold tracking-tight">{formatCents(item.value)}</span>
+                          </div>
+                        </button>
+                      )
                     ))}
                   </div>
 
@@ -465,9 +698,18 @@ export default function Home() {
                         innerRadius={55}
                         outerRadius={85}
                         stroke="transparent"
+                        onClick={(payload: any) => {
+                          const categoryName = payload?.category;
+                          if (!categoryName) return;
+                          handleCategorySliceClick(String(categoryName));
+                        }}
                       >
                         {categoryBreakdown.data.map((entry) => (
-                          <Cell key={entry.key} fill={entry.fill} />
+                          <Cell
+                            key={entry.key}
+                            fill={entry.fill}
+                            style={{ cursor: categoryScope === "shared" && !groupId ? "default" : "pointer" }}
+                          />
                         ))}
                       </Pie>
                     </RePieChart>
@@ -476,6 +718,46 @@ export default function Home() {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={categoryChooserOpen} onOpenChange={setCategoryChooserOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ver despesas</DialogTitle>
+                <DialogDescription>
+                  Escolha onde ver a categoria {pendingCategoryName ? `"${pendingCategoryName}"` : "selecionada"}.
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const month = categoryReportMonthHref;
+                    const catParam = encodeURIComponent(String(pendingCategoryName || "").trim());
+                    setCategoryChooserOpen(false);
+                    if (!catParam) return;
+                    navigate(`/personal-expenses?month=${month}&category=${catParam}`);
+                  }}
+                >
+                  Pessoais
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    const month = categoryReportMonthHref;
+                    const catParam = encodeURIComponent(String(pendingCategoryName || "").trim());
+                    setCategoryChooserOpen(false);
+                    if (!catParam) return;
+                    if (!groupId) return;
+                    navigate(`/shared-expenses?month=${month}&category=${catParam}`);
+                  }}
+                  disabled={!groupId}
+                >
+                  Compartilhadas
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <div className="grid grid-cols-2 gap-2">
                 {/* Card Grupos com skeleton */}
@@ -728,19 +1010,19 @@ export default function Home() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
-                  <Link href="/shared-expenses">
+                  <Link href="/shared-expenses?create=1">
                     <CreditCard className="h-4 w-4" />
                     Despesa compartilhada
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
-                  <Link href="/personal-expenses">
+                  <Link href="/personal-expenses?create=1">
                     <Wallet className="h-4 w-4" />
                     Despesa pessoal
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="interactive-tap w-full justify-start gap-2 rounded-2xl py-3">
-                  <Link href="/tasks">
+                  <Link href="/tasks?create=1">
                     <Plus className="h-4 w-4" />
                     Nova tarefa
                   </Link>

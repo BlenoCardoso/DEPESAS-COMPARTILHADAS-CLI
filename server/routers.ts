@@ -271,12 +271,21 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure
-      .input(z.object({ groupId: z.string() }))
+      .input(
+        z.object({
+          groupId: z.string(),
+          from: z.date().optional(),
+          to: z.date().optional(),
+        })
+      )
       .query(async ({ ctx, input }) => {
         const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
         if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
 
-        return await db.getGroupSharedExpenses(input.groupId);
+        // Gera despesas recorrentes vencidas (idempotente)
+        await db.ensureDueExpenseTemplates(input.groupId);
+
+        return await db.getGroupSharedExpenses(input.groupId, { from: input.from, to: input.to });
       }),
 
     // Total de despesas compartilhadas em todos os grupos do usuário
@@ -286,11 +295,10 @@ export const appRouter = router({
         let count = 0;
         let totalAmount = 0; // em centavos
         for (const g of groups) {
-          const list = await db.getGroupSharedExpenses(g.group.id);
+          const list = await db.getGroupSharedExpenseDocs(g.group.id);
           count += list.length;
-          for (const item of list) {
-            const amt = Number(item.expense?.amount) || 0;
-            totalAmount += amt;
+          for (const expense of list as any[]) {
+            totalAmount += Number(expense?.amount) || 0;
           }
         }
         return { count, totalAmount };
@@ -310,21 +318,48 @@ export const appRouter = router({
         const totals = new Map<string, number>();
 
         const monthIndex = input.month - 1;
+        const start = new Date(input.year, monthIndex, 1);
+        const end = new Date(input.year, monthIndex + 1, 0, 23, 59, 59, 999);
 
         for (const g of groups) {
-          const list = await db.getGroupSharedExpenses(g.group.id);
-          for (const item of list as any[]) {
-            const expense = item?.expense;
+          const list = await db.getGroupSharedExpenseDocs(g.group.id, { from: start, to: end });
+          for (const expense of list as any[]) {
             if (!expense) continue;
-            const rawDate = expense.date;
-            const d = rawDate instanceof Date ? rawDate : new Date(rawDate as any);
-            if (Number.isNaN(d.getTime())) continue;
-            if (d.getFullYear() !== input.year || d.getMonth() !== monthIndex) continue;
-
             const category = String(expense.category || "Sem categoria").trim() || "Sem categoria";
             const amt = Number(expense.amount) || 0;
             totals.set(category, (totals.get(category) || 0) + amt);
           }
+        }
+
+        return Array.from(totals.entries())
+          .map(([category, amount]) => ({ category, amount }))
+          .sort((a, b) => b.amount - a.amount);
+      }),
+
+    // Totais por categoria (mês/ano) apenas do grupo atual.
+    monthCategoryTotals: protectedProcedure
+      .input(
+        z.object({
+          groupId: z.string(),
+          year: z.number().int(),
+          month: z.number().int().min(1).max(12),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const isMember = await db.isUserInGroup(ctx.user.id!, input.groupId);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const totals = new Map<string, number>();
+        const monthIndex = input.month - 1;
+        const start = new Date(input.year, monthIndex, 1);
+        const end = new Date(input.year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+        const list = await db.getGroupSharedExpenseDocs(input.groupId, { from: start, to: end });
+        for (const expense of list as any[]) {
+          if (!expense) continue;
+          const category = String(expense.category || "Sem categoria").trim() || "Sem categoria";
+          const amt = Number(expense.amount) || 0;
+          totals.set(category, (totals.get(category) || 0) + amt);
         }
 
         return Array.from(totals.entries())
@@ -1072,22 +1107,15 @@ export const appRouter = router({
         // despesas compartilhadas agregadas
         let shared: any[] = [];
         for (const gid of targetGroupIds) {
-          const list = await db.getGroupSharedExpenses(gid);
-          // aplicar filtro de data se informado
-          const filtered = list.filter(item => {
-            const d = new Date(item.expense.date);
-            if (input?.startDate && d < input.startDate) return false;
-            if (input?.endDate && d > input.endDate) return false;
-            return true;
-          });
-          shared = shared.concat(filtered);
+          const list = await db.getGroupSharedExpenseDocs(gid, { from: input?.startDate, to: input?.endDate });
+          shared = shared.concat(list);
         }
 
         const personalTotal = personal.reduce((acc, e: any) => acc + (e.amount || 0), 0);
-        const sharedTotal = shared.reduce((acc, e: any) => acc + (e.expense?.amount || 0), 0);
+        const sharedTotal = shared.reduce((acc, e: any) => acc + (e.amount || 0), 0);
         const byCategory: Record<string, number> = {};
         personal.forEach((e: any) => { const cat = e.category || "Outros"; byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0); });
-        shared.forEach(e => { const cat = e.expense?.category || "Outros"; byCategory[cat] = (byCategory[cat] || 0) + (e.expense?.amount || 0); });
+        shared.forEach((e: any) => { const cat = e.category || "Outros"; byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0); });
         const categories = Object.entries(byCategory).sort((a,b) => b[1]-a[1]).map(([name,total]) => ({ name, total }));
         return { personalTotal, sharedTotal, grandTotal: personalTotal + sharedTotal, categories };
       }),

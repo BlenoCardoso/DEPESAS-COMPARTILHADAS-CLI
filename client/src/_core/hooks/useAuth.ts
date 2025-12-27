@@ -9,8 +9,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { auth, googleProvider } from "@/lib/firebase";
 import {
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithCredential,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -248,6 +250,76 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, [performNativeGoogleSignIn, usingFirebase, utils.auth.me]);
 
+  const loginWithEmail = useCallback(
+    async (email: string, password: string) => {
+      if (!usingFirebase) {
+        window.location.href = getLoginUrl();
+        return;
+      }
+
+      const cleanEmail = String(email || "").trim();
+      if (!cleanEmail || !password) {
+        throw new Error("Informe e-mail e senha");
+      }
+
+      setFirebaseLoading(true);
+      setFirebaseError(null);
+
+      try {
+        const result = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        try {
+          await syncServerSession(result.user);
+        } catch (err) {
+          console.warn("[Auth] Failed to create server session after email login", err);
+        }
+        if (typeof window !== "undefined") {
+          window.location.href = "/";
+        }
+      } catch (error: any) {
+        setFirebaseError(error);
+        throw error;
+      } finally {
+        setFirebaseLoading(false);
+      }
+    },
+    [syncServerSession, usingFirebase]
+  );
+
+  const signUpWithEmail = useCallback(
+    async (email: string, password: string) => {
+      if (!usingFirebase) {
+        window.location.href = getLoginUrl();
+        return;
+      }
+
+      const cleanEmail = String(email || "").trim();
+      if (!cleanEmail || !password) {
+        throw new Error("Informe e-mail e senha");
+      }
+
+      setFirebaseLoading(true);
+      setFirebaseError(null);
+
+      try {
+        const result = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        try {
+          await syncServerSession(result.user);
+        } catch (err) {
+          console.warn("[Auth] Failed to create server session after email signup", err);
+        }
+        if (typeof window !== "undefined") {
+          window.location.href = "/";
+        }
+      } catch (error: any) {
+        setFirebaseError(error);
+        throw error;
+      } finally {
+        setFirebaseLoading(false);
+      }
+    },
+    [syncServerSession, usingFirebase]
+  );
+
   // Logout
   const logout = useCallback(async () => {
     if (usingFirebase) {
@@ -375,5 +447,7 @@ export function useAuth(options?: UseAuthOptions) {
     },
     logout,
     loginWithGoogle,
+    loginWithEmail,
+    signUpWithEmail,
   };
 }

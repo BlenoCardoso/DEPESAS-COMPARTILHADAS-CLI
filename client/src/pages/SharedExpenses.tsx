@@ -40,7 +40,7 @@ import {
   Tags,
   Repeat,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { toast } from "sonner";
 import { formatCents, userLabel } from "@/lib/utils";
@@ -163,6 +163,28 @@ export default function SharedExpenses() {
     defaultAllowMemberEdits: false,
   });
 
+  const prevGroupIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!groupId) {
+      prevGroupIdRef.current = groupId;
+      return;
+    }
+
+    const prev = prevGroupIdRef.current;
+    if (prev && prev !== groupId) {
+      // Ao trocar de grupo, evite filtros/painéis do grupo anterior mascararem os dados.
+      setPanel(null);
+      setDetailId(null);
+      setFilterText("");
+      setFilterCategory("");
+      setFilterStatus("");
+      setFilterStart("");
+      setFilterEnd("");
+    }
+
+    prevGroupIdRef.current = groupId;
+  }, [groupId]);
+
   useEffect(() => {
     if (!settingsKey) return;
     try {
@@ -198,10 +220,32 @@ export default function SharedExpenses() {
     }
   }, [groupsList, groupId, setCurrentGroupId]);
 
-  const { data: expenses, isLoading, refetch } = trpc.sharedExpenses.list.useQuery(
-    { groupId: groupId! },
-    { enabled: !!groupId && isAuthenticated }
+  const selectedMonthRange = useMemo(() => {
+    if (!selectedMonth) return null;
+    const [yy, mm] = selectedMonth.split("-").map((n) => parseInt(n, 10));
+    if (!yy || !mm) return null;
+    const from = new Date(yy, mm - 1, 1);
+    const to = new Date(yy, mm, 0, 23, 59, 59, 999);
+    return { from, to };
+  }, [selectedMonth]);
+
+  const { data: expenses, isLoading, refetch, error: expensesError } = trpc.sharedExpenses.list.useQuery(
+    {
+      groupId: groupId!,
+      from: selectedMonthRange?.from,
+      to: selectedMonthRange?.to,
+    },
+    {
+      enabled: !!groupId && isAuthenticated,
+      staleTime: 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    }
   );
+
+  useEffect(() => {
+    if (expensesError) toast.error(expensesError.message);
+  }, [expensesError]);
   const detailQuery = trpc.sharedExpenses.getById.useQuery(
     { id: detailId! },
     { enabled: !!detailId && panel === "detail" }
@@ -399,17 +443,12 @@ export default function SharedExpenses() {
       return;
     }
 
-    try {
-      let attachmentUrl: string | undefined;
-      
-      // Upload de anexo se houver
-      if (attachmentFile && groupId) {
-        setUploadingAttachment(true);
-        const tempId = `temp_${Date.now()}`; // ID temporário até criar despesa
-        attachmentUrl = await uploadExpenseAttachment(groupId, tempId, attachmentFile, user?.id || "");
-      }
+    const selectedFile = attachmentFile;
 
-      createMutation.mutate({
+    try {
+      setUploadingAttachment(Boolean(selectedFile));
+
+      const created = await createMutation.mutateAsync({
         groupId,
         title,
         amount: amt,
@@ -420,12 +459,22 @@ export default function SharedExpenses() {
         splitMode,
         customSplits: customSplits.length > 0 ? customSplits : undefined,
         paidBy: paidBy || undefined,
-        attachmentUrl,
         // description omitida para evitar envio de undefined
         splits,
       });
+
+      if (selectedFile) {
+        const newUrl = await uploadExpenseAttachment(groupId, created.expenseId, selectedFile, user?.id || "");
+        try {
+          await updateMutation.mutateAsync({ id: created.expenseId, attachmentUrl: newUrl });
+        } catch (e) {
+          // Evita órfão caso o update falhe
+          void deleteExpenseAttachment(newUrl);
+          throw e;
+        }
+      }
     } catch (error: any) {
-      toast.error(error.message || "Erro ao fazer upload do anexo");
+      toast.error(error?.message || "Erro ao salvar despesa");
     } finally {
       setUploadingAttachment(false);
     }
@@ -575,6 +624,24 @@ export default function SharedExpenses() {
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateFrequency, setTemplateFrequency] = useState<"weekly" | "monthly" | "yearly">("monthly");
   const [templateNextDue, setTemplateNextDue] = useState<string>(() => new Date().toISOString().substring(0, 10));
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+
+  const usedCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of expensesList) {
+      const name = String(row?.expense?.category || "").trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        icon: categoryIconByName.get(name) || undefined,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [expensesList, categoryIconByName]);
 
   const getInitials = (name?: string | null, email?: string | null) => {
     const base = (name || "").trim() || (email || "").split("@")[0] || "";
@@ -606,15 +673,68 @@ export default function SharedExpenses() {
   };
 
   useEffect(() => {
-    if (!isMobile) return;
     if (!location || !location.includes("create=1")) return;
     openCreate();
     const clean = (location.split("?")[0] || "/shared-expenses").split("#")[0] || "/shared-expenses";
     if (clean !== location) navigate(clean);
-  }, [isMobile, location]);
+  }, [location]);
+
+  useEffect(() => {
+    if (!location || !location.includes("?")) return;
+    const query = location.split("?")[1] || "";
+    if (!query) return;
+    const params = new URLSearchParams(query);
+    const month = params.get("month");
+    const categoryParam = params.get("category");
+
+    let changed = false;
+    if (month && /^\d{4}-\d{2}$/.test(month) && month !== selectedMonth) {
+      setSelectedMonth(month);
+      changed = true;
+    }
+    if (categoryParam) {
+      const decoded = String(categoryParam);
+      if (decoded !== filterCategory) {
+        setFilterCategory(decoded);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setPanel(null);
+    }
+
+    if (params.has("month") || params.has("category")) {
+      const clean = (location.split("?")[0] || "/shared-expenses").split("#")[0] || "/shared-expenses";
+      if (clean !== location) navigate(clean);
+    }
+  }, [location]);
+
+  useEffect(() => {
+    if (!location || !location.includes("recurring=1")) return;
+    setPanel("recurring");
+    const clean = (location.split("?")[0] || "/shared-expenses").split("#")[0] || "/shared-expenses";
+    if (clean !== location) navigate(clean);
+  }, [location]);
+
+  const showSharedCreateFab = Boolean(groupId) && panel === null;
 
   return (
     <div className="relative space-y-3 sm:space-y-4 animate-fade-in">
+      {showSharedCreateFab ? (
+        <BodyPortal>
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            className="fixed bottom-[calc(5rem+var(--safe-area-bottom)+0.75rem)] right-4 z-[60] h-12 w-12 rounded-2xl p-0 shadow-md"
+            aria-label="Adicionar despesa compartilhada"
+            onClick={openCreate}
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </BodyPortal>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup type="single" value="shared" className="w-full" variant="outline">
           <ToggleGroupItem
@@ -669,7 +789,7 @@ export default function SharedExpenses() {
       <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Select value={groupId ?? undefined} onValueChange={(v) => setCurrentGroupId(v)}>
+            <Select value={groupId || ""} onValueChange={(v) => setCurrentGroupId(v || null)}>
               <SelectTrigger className="h-9 rounded-2xl">
                 <SelectValue placeholder="Selecionar grupo" />
               </SelectTrigger>
@@ -749,11 +869,9 @@ export default function SharedExpenses() {
 
       {/* Chips compactos */}
       <div className="flex flex-wrap gap-2">
-        {(uiSettings.mode === "advanced" || !isMobile) && (
-          <Button size="sm" variant="outline" className="rounded-full gap-2" disabled={!groupId} onClick={() => setPanel("recurring")}> 
-            <Repeat className="h-4 w-4" /> Recorrentes
-          </Button>
-        )}
+        <Button size="sm" variant="outline" className="rounded-full gap-2" disabled={!groupId} onClick={() => setPanel("recurring")}> 
+          <Repeat className="h-4 w-4" /> Recorrentes
+        </Button>
         <Button size="sm" variant="outline" className="rounded-full gap-2" disabled={!groupId} onClick={() => setPanel("categories")}>
           <Tags className="h-4 w-4" /> Categorias
         </Button>
@@ -1095,28 +1213,24 @@ export default function SharedExpenses() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Categorias</DrawerTitle>
-            <DrawerDescription>Crie e edite categorias.</DrawerDescription>
+            <DrawerDescription>Veja categorias usadas e gerencie o grupo.</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <Input value={newCategoryIcon} onChange={(e) => setNewCategoryIcon(e.target.value)} placeholder="😀" className="rounded-2xl" />
-              <div className="col-span-2">
-                <Input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Nome" className="rounded-2xl" />
+            {usedCategories.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Categorias nas despesas</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {usedCategories.map((c) => (
+                    <div key={c.name} className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/40 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{c.icon ? `${c.icon} ` : ""}{c.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{c.count} item(ns)</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <Button
-              className="rounded-2xl"
-              disabled={!groupId || !newCategoryName.trim() || createCategoryMutation.isPending}
-              onClick={() => {
-                if (!groupId) return;
-                createCategoryMutation.mutate({ groupId, name: newCategoryName.trim(), icon: newCategoryIcon.trim() || undefined });
-                setNewCategoryName("");
-                setNewCategoryIcon("");
-              }}
-            >
-              {createCategoryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              + Nova categoria
-            </Button>
+            ) : null}
 
             <div className="space-y-2">
               {(categoriesQuery.data || []).map((c: any) => (
@@ -1152,6 +1266,29 @@ export default function SharedExpenses() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-medium text-muted-foreground">Criar nova</p>
+              <div className="grid grid-cols-3 gap-2">
+                <Input value={newCategoryIcon} onChange={(e) => setNewCategoryIcon(e.target.value)} placeholder="😀" className="rounded-2xl" />
+                <div className="col-span-2">
+                  <Input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Nome" className="rounded-2xl" />
+                </div>
+              </div>
+              <Button
+                className="rounded-2xl"
+                disabled={!groupId || !newCategoryName.trim() || createCategoryMutation.isPending}
+                onClick={() => {
+                  if (!groupId) return;
+                  createCategoryMutation.mutate({ groupId, name: newCategoryName.trim(), icon: newCategoryIcon.trim() || undefined });
+                  setNewCategoryName("");
+                  setNewCategoryIcon("");
+                }}
+              >
+                {createCategoryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                + Nova categoria
+              </Button>
             </div>
           </div>
           <DrawerFooter>
@@ -1244,11 +1381,11 @@ export default function SharedExpenses() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Recorrentes</DrawerTitle>
-            <DrawerDescription>Cadastre despesas que se repetem.</DrawerDescription>
+            <DrawerDescription>Crie, edite e ative/desative recorrentes.</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-3">
             <div className="space-y-2">
-              <Label className="text-xs">Nova recorrente</Label>
+              <Label className="text-xs">{editingTemplateId ? "Editar recorrente" : "Nova recorrente"}</Label>
               <Input value={templateTitle} onChange={(e) => setTemplateTitle(e.target.value)} placeholder="Título" className="rounded-2xl" />
               <div className="grid grid-cols-2 gap-2">
                 <Input value={templateAmount} onChange={(e) => setTemplateAmount(e.target.value)} placeholder="Valor (R$)" inputMode="decimal" className="rounded-2xl" />
@@ -1262,34 +1399,67 @@ export default function SharedExpenses() {
                 </Select>
               </div>
               <Input type="date" value={templateNextDue} onChange={(e) => setTemplateNextDue(e.target.value)} className="rounded-2xl" />
-              <Button
-                className="rounded-2xl"
-                disabled={!groupId || !templateTitle.trim() || !templateAmount.trim() || createTemplateMutation.isPending}
-                onClick={() => {
-                  if (!groupId || !user?.id) return;
-                  const amt = realsToCents(templateAmount);
-                  if (!amt || amt <= 0) {
-                    toast.error("Informe um valor válido");
-                    return;
-                  }
-                  createTemplateMutation.mutate({
-                    groupId,
-                    title: templateTitle.trim(),
-                    amount: amt,
-                    currency: "BRL",
-                    category: undefined,
-                    paidBy: user.id,
-                    splitMode: uiSettings.defaultSplitMode,
-                    frequency: templateFrequency,
-                    nextDueDate: new Date(templateNextDue + "T00:00:00"),
-                  });
-                  setTemplateTitle("");
-                  setTemplateAmount("");
-                }}
-              >
-                {createTemplateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                + Criar
-              </Button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="rounded-2xl"
+                  disabled={!groupId || !user?.id || !templateTitle.trim() || !templateAmount.trim() || createTemplateMutation.isPending || updateTemplateMutation.isPending}
+                  onClick={() => {
+                    if (!groupId || !user?.id) return;
+                    const amt = realsToCents(templateAmount);
+                    if (!Number.isFinite(amt) || amt <= 0) {
+                      toast.error("Informe um valor válido");
+                      return;
+                    }
+
+                    if (editingTemplateId) {
+                      updateTemplateMutation.mutate({
+                        id: editingTemplateId,
+                        title: templateTitle.trim(),
+                        amount: amt,
+                        frequency: templateFrequency,
+                        nextDueDate: new Date(templateNextDue + "T00:00:00"),
+                      } as any);
+                    } else {
+                      createTemplateMutation.mutate({
+                        groupId,
+                        title: templateTitle.trim(),
+                        amount: amt,
+                        currency: "BRL",
+                        category: undefined,
+                        paidBy: user.id,
+                        splitMode: uiSettings.defaultSplitMode,
+                        frequency: templateFrequency,
+                        nextDueDate: new Date(templateNextDue + "T00:00:00"),
+                      });
+                    }
+
+                    setEditingTemplateId(null);
+                    setTemplateTitle("");
+                    setTemplateAmount("");
+                    setTemplateFrequency("monthly");
+                    setTemplateNextDue(new Date().toISOString().substring(0, 10));
+                  }}
+                >
+                  {(createTemplateMutation.isPending || updateTemplateMutation.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {editingTemplateId ? "Salvar" : "+ Criar"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-2xl"
+                  disabled={!editingTemplateId}
+                  onClick={() => {
+                    setEditingTemplateId(null);
+                    setTemplateTitle("");
+                    setTemplateAmount("");
+                    setTemplateFrequency("monthly");
+                    setTemplateNextDue(new Date().toISOString().substring(0, 10));
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1300,6 +1470,23 @@ export default function SharedExpenses() {
                     <p className="text-xs text-muted-foreground truncate">{formatCents(t.amount)} • {t.frequency}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-9 w-9 rounded-2xl"
+                      onClick={() => {
+                        setEditingTemplateId(String(t.id));
+                        setTemplateTitle(String(t.title || ""));
+                        setTemplateAmount(centsToRealsInput(Number(t.amount || 0)));
+                        setTemplateFrequency((t.frequency || "monthly") as any);
+                        const dueRaw = (t as any).nextDueDate;
+                        const due = dueRaw ? new Date(dueRaw) : null;
+                        setTemplateNextDue(due && Number.isFinite(due.getTime()) ? due.toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10));
+                      }}
+                      aria-label="Editar recorrente"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Switch
                       checked={!!t.isActive}
                       onCheckedChange={(checked) => updateTemplateMutation.mutate({ id: t.id, isActive: checked })}

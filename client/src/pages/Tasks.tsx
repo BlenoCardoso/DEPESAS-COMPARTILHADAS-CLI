@@ -16,10 +16,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { CheckCircle2, CheckSquare, Loader2, MoreVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/useMobile";
 import BodyPortal from "@/components/BodyPortal";
+import { useLocation } from "wouter";
 
 function TasksListSkeleton() {
   return (
@@ -48,6 +49,7 @@ function TasksListSkeleton() {
 export default function Tasks() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
+  const [location, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -109,6 +111,15 @@ export default function Tasks() {
     }
     return list;
   }, [tasksList, statusFilter, filterText]);
+
+  // Permite abrir a criação via atalho (ex.: botão + do rodapé)
+  // Mantém comportamento similar às telas de despesas.
+  useEffect(() => {
+    if (!location || !location.includes("create=1")) return;
+    setIsCreateOpen(true);
+    const clean = (location.split("?")[0] || "/tasks").split("#")[0] || "/tasks";
+    if (clean !== location) navigate(clean);
+  }, [location, navigate]);
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">

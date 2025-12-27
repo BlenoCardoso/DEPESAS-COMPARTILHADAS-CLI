@@ -19,6 +19,18 @@ import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useLocation } from "wouter";
 
+const DEFAULT_CATEGORY_NAMES = [
+  "Alimentação",
+  "Transporte",
+  "Moradia",
+  "Lazer",
+  "Saúde",
+  "Educação",
+  "Compras",
+  "Serviços",
+  "Outros",
+];
+
 export default function PersonalExpenses() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
@@ -39,6 +51,16 @@ export default function PersonalExpenses() {
 
   const { data: expenses, isLoading, refetch } = trpc.personalExpenses.list.useQuery(undefined, { enabled: isAuthenticated });
   const expensesList = (expenses as any[]) ?? [];
+
+  const categorySuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of DEFAULT_CATEGORY_NAMES) set.add(n);
+    for (const e of expensesList) {
+      const name = String(e?.category || "").trim();
+      if (name) set.add(name);
+    }
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [expensesList]);
 
   const visibleExpenses = useMemo(() => {
     let list = expensesList;
@@ -159,25 +181,69 @@ export default function PersonalExpenses() {
   const handleDelete = (id: string) => { if (confirm("Remover despesa?")) deleteMutation.mutate({ id }); };
 
   useEffect(() => {
-    if (!isMobile) return;
     if (!location || !location.includes("create=1")) return;
     setIsCreateOpen(true);
     const clean = (location.split("?")[0] || "/personal-expenses").split("#")[0] || "/personal-expenses";
     if (clean !== location) navigate(clean);
-  }, [isMobile, location]);
+  }, [location]);
+
+  useEffect(() => {
+    if (!location || !location.includes("?")) return;
+    const query = location.split("?")[1] || "";
+    if (!query) return;
+    const params = new URLSearchParams(query);
+    const month = params.get("month");
+    const categoryParam = params.get("category");
+
+    let changed = false;
+
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [yy, mm] = month.split("-");
+      const year = parseInt(yy, 10);
+      const monthIndex = parseInt(mm, 10) - 1;
+      if (year && monthIndex >= 0 && monthIndex <= 11) {
+        const start = new Date(year, monthIndex, 1).toISOString().substring(0, 10);
+        const end = new Date(year, monthIndex + 1, 0).toISOString().substring(0, 10);
+        if (start !== filterStart) {
+          setFilterStart(start);
+          changed = true;
+        }
+        if (end !== filterEnd) {
+          setFilterEnd(end);
+          changed = true;
+        }
+      }
+    }
+
+    if (categoryParam) {
+      const decoded = String(categoryParam);
+      if (decoded !== filterCategory) {
+        setFilterCategory(decoded);
+        changed = true;
+      }
+    }
+
+    if (changed) setFiltersOpen(true);
+
+    if (params.has("month") || params.has("category")) {
+      const clean = (location.split("?")[0] || "/personal-expenses").split("#")[0] || "/personal-expenses";
+      if (clean !== location) navigate(clean);
+    }
+  }, [location]);
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Despesas pessoais</h1>
-        <p className="text-sm text-muted-foreground">Lançamentos pessoais, rápidos e organizados.</p>
-      </div>
+      <datalist id="personal-category-options">
+        {categorySuggestions.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
 
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-1">
         <ToggleGroup type="single" value="personal" className="w-full" variant="outline">
           <ToggleGroupItem
             value="shared"
-            className="flex-1 rounded-xl"
+            className="flex-1 rounded-xl data-[state=on]:bg-primary/15 data-[state=on]:text-primary"
             onClick={() => navigate("/shared-expenses")}
           >
             Compartilhadas
@@ -189,6 +255,11 @@ export default function PersonalExpenses() {
             Pessoais
           </ToggleGroupItem>
         </ToggleGroup>
+      </div>
+
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold sm:text-3xl">Despesas pessoais</h1>
+        <p className="text-sm text-muted-foreground">Lançamentos pessoais, rápidos e organizados.</p>
       </div>
 
       <Accordion type="single" collapsible defaultValue={undefined}>
@@ -243,7 +314,7 @@ export default function PersonalExpenses() {
               <div className="space-y-4 py-2">
                 <div className="space-y-2"><Label>Título *</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Valor (R$) *</Label><Input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ex: 25.99" /></div>
-                <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Categoria</Label><Input list="personal-category-options" value={category} onChange={e => setCategory(e.target.value)} placeholder="Selecione ou digite" /></div>
                 <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
               </div>
               <DialogFooter>
@@ -293,7 +364,7 @@ export default function PersonalExpenses() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Categoria</Label>
-                  <Input value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full rounded-2xl" />
+                  <Input list="personal-category-options" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="Categoria" className="w-full rounded-2xl" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Início</Label>
@@ -335,7 +406,7 @@ export default function PersonalExpenses() {
           <div className="space-y-4 py-2">
             <div className="space-y-2"><Label>Título</Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
             <div className="space-y-2"><Label>Valor (R$)</Label><Input value={amount} onChange={e => setAmount(e.target.value)} /></div>
-            <div className="space-y-2"><Label>Categoria</Label><Input value={category} onChange={e => setCategory(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Categoria</Label><Input list="personal-category-options" value={category} onChange={e => setCategory(e.target.value)} placeholder="Selecione ou digite" /></div>
             <div className="space-y-2"><Label>Data</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
           </div>
           <DialogFooter>

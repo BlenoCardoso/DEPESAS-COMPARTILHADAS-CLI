@@ -17,6 +17,11 @@ import { Capacitor } from "@capacitor/core";
 const routeLoaders = {
   Home: () => import("./pages/Home"),
   FirebaseLogin: () => import("./pages/FirebaseLogin"),
+  More: () => import("./pages/More"),
+  Profile: () => import("./pages/Profile"),
+  Calculator: () => import("./pages/Calculator"),
+  ExportData: () => import("./pages/ExportData"),
+  ImportData: () => import("./pages/ImportData"),
   Groups: () => import("./pages/Groups"),
   GroupDetails: () => import("./pages/GroupDetails"),
   SharedExpenses: () => import("./pages/SharedExpenses"),
@@ -36,6 +41,11 @@ const routeLoaders = {
 
 const Home = lazy(routeLoaders.Home);
 const FirebaseLogin = lazy(routeLoaders.FirebaseLogin);
+const More = lazy(routeLoaders.More);
+const Profile = lazy(routeLoaders.Profile);
+const Calculator = lazy(routeLoaders.Calculator);
+const ExportData = lazy(routeLoaders.ExportData);
+const ImportData = lazy(routeLoaders.ImportData);
 const Groups = lazy(routeLoaders.Groups);
 const GroupDetails = lazy(routeLoaders.GroupDetails);
 const SharedExpenses = lazy(routeLoaders.SharedExpenses);
@@ -94,6 +104,11 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/firebase-login" component={FirebaseLogin} />
+          <Route path="/more" component={More} />
+          <Route path="/profile" component={Profile} />
+          <Route path="/calculator" component={Calculator} />
+          <Route path="/export-data" component={ExportData} />
+          <Route path="/import-data" component={ImportData} />
           <Route path="/groups" component={Groups} />
           <Route path="/groups/:id">{params => <GroupDetails groupId={params.id} />}</Route>
           <Route path="/shared-expenses" component={SharedExpenses} />

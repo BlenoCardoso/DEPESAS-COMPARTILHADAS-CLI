@@ -37,6 +37,101 @@ const omitUndefined = <T extends Record<string, any>>(obj: T): T => {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 };
 
+const ymdKey = (d: Date) => d.toISOString().slice(0, 10);
+
+const addMonthsClamped = (date: Date, months: number) => {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const day = date.getDate();
+  const target = new Date(y, m + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+  return target;
+};
+
+const addYearsClamped = (date: Date, years: number) => {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const day = date.getDate();
+  const target = new Date(y + years, m, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+  return target;
+};
+
+const nextDueFrom = (date: Date, frequency: "weekly" | "monthly" | "yearly") => {
+  if (frequency === "weekly") return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7);
+  if (frequency === "yearly") return addYearsClamped(date, 1);
+  return addMonthsClamped(date, 1);
+};
+
+const getGroupMemberIdsFast = async (groupId: string): Promise<string[]> => {
+  const db = adminDb();
+  const snap = await db.collection("groups").doc(groupId).collection("members").get();
+  return snap.docs.map((d) => d.id);
+};
+
+const getGroupMembersLean = async (groupId: string): Promise<Array<{ userId: string; monthlyIncome?: number }>> => {
+  const db = adminDb();
+  const snap = await db.collection("groupMembers").where("groupId", "==", groupId).get();
+  return snap.docs.map((d) => {
+    const m: any = normalize(d.data() || {});
+    return { userId: String(m.userId), monthlyIncome: typeof m.monthlyIncome === "number" ? m.monthlyIncome : undefined };
+  });
+};
+
+const computeTemplateSplits = async (groupId: string, template: any): Promise<Array<{ userId: string; amount: number }>> => {
+  const amount = Number(template.amount) || 0;
+  const splitMode = (template.splitMode || "equal") as string;
+  const customSplits = Array.isArray(template.customSplits) ? template.customSplits : undefined;
+
+  if (splitMode === "single") {
+    return [{ userId: String(template.paidBy), amount }];
+  }
+
+  if (splitMode === "fixed" && customSplits?.length) {
+    return customSplits.map((cs: any) => ({ userId: String(cs.userId), amount: Number(cs.value) || 0 }))
+      .filter((s: any) => s.amount > 0);
+  }
+
+  if (splitMode === "percentage" && customSplits?.length) {
+    return customSplits.map((cs: any) => ({
+      userId: String(cs.userId),
+      amount: Math.floor((amount * (Number(cs.value) || 0)) / 100),
+    })).filter((s: any) => s.amount > 0);
+  }
+
+  if (splitMode === "proportional") {
+    const members = await getGroupMembersLean(groupId);
+    const incomes = new Map<string, number>();
+    for (const m of members) {
+      const income = Number(m.monthlyIncome) || 100000;
+      incomes.set(String(m.userId), income);
+    }
+    const totalIncome = Array.from(incomes.values()).reduce((sum, v) => sum + v, 0);
+    return Array.from(incomes.entries()).map(([userId, income]) => ({
+      userId,
+      amount: totalIncome > 0 ? Math.floor((amount * income) / totalIncome) : 0,
+    })).filter((s) => s.amount > 0);
+  }
+
+  // equal (default)
+  const memberIds = await getGroupMemberIdsFast(groupId);
+  const count = memberIds.length || 1;
+  const each = Math.floor(amount / count);
+  let remainder = amount - each * count;
+  return memberIds.map((userId) => ({
+    userId: String(userId),
+    amount: each + (remainder-- > 0 ? 1 : 0),
+  })).filter((s) => s.amount > 0);
+};
+
+const isAlreadyExistsError = (err: any) => {
+  const code = err?.code;
+  const msg = String(err?.message || "");
+  return code === 6 || code === "already-exists" || msg.toLowerCase().includes("already exists") || msg.toLowerCase().includes("already-exists");
+};
+
 // ============ USERS ============
 export async function upsertUser(user: User): Promise<void> {
   const db = adminDb();
@@ -302,20 +397,146 @@ export async function getSharedExpenseById(id: string) {
   return { id: doc.id, ...normalize(doc.data() || {}) };
 }
 
-export async function getGroupSharedExpenses(groupId: string) {
+type SharedExpenseRange = {
+  from?: Date;
+  to?: Date;
+};
+
+export async function getGroupSharedExpenseDocs(groupId: string, range?: SharedExpenseRange) {
   const db = adminDb();
-  const snap = await db
-    .collection("sharedExpenses")
-    .where("groupId", "==", groupId)
-    .orderBy("date", "desc")
-    .get();
-  const out: any[] = [];
-  for (const d of snap.docs) {
-    const expense = normalize(d.data());
-    const uDoc = await db.collection("users").doc(expense.paidBy).get();
-    if (uDoc.exists) out.push({ expense: { id: d.id, ...expense }, paidByUser: { id: uDoc.id, ...normalize(uDoc.data() || {}) } });
+  let q: FirebaseFirestore.Query = db.collection("sharedExpenses").where("groupId", "==", groupId);
+
+  if (range?.from) q = q.where("date", ">=", range.from);
+  if (range?.to) q = q.where("date", "<=", range.to);
+
+  q = q.orderBy("date", "desc");
+
+  const snap = await q.get();
+  return snap.docs.map((d) => ({ id: d.id, ...normalize(d.data() || {}) } as any));
+}
+
+export async function getGroupSharedExpenses(groupId: string, range?: SharedExpenseRange) {
+  const db = adminDb();
+  const expenses = await getGroupSharedExpenseDocs(groupId, range);
+  const paidByIds = Array.from(new Set(expenses.map((e) => String(e.paidBy || "")).filter(Boolean)));
+
+  const userById = new Map<string, any>();
+  if (paidByIds.length) {
+    const refs = paidByIds.map((id) => db.collection("users").doc(id));
+    const docs = await db.getAll(...refs);
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      userById.set(String(doc.id), { id: doc.id, ...normalize(doc.data() || {}) });
+    }
   }
-  return out;
+
+  return expenses.map((expense) => ({
+    expense,
+    paidByUser: userById.get(String(expense.paidBy)) || null,
+  }));
+}
+
+// Gera despesas vencidas a partir de templates ativos (idempotente)
+export async function ensureDueExpenseTemplates(groupId: string, now: Date = new Date()) {
+  const db = adminDb();
+  // Throttle para evitar custo em toda listagem
+  const memKey = `ensureDueExpenseTemplates:${groupId}`;
+  const g: any = globalThis as any;
+  if (!g.__ensureDueExpenseTemplatesLastRun) g.__ensureDueExpenseTemplatesLastRun = new Map<string, number>();
+  const lastMem = (g.__ensureDueExpenseTemplatesLastRun as Map<string, number>).get(memKey) || 0;
+  if (Date.now() - lastMem < 60_000) return;
+  (g.__ensureDueExpenseTemplatesLastRun as Map<string, number>).set(memKey, Date.now());
+
+  try {
+    const groupDoc = await db.collection("groups").doc(groupId).get();
+    const raw = groupDoc.exists ? (groupDoc.get("lastEnsureDueTemplatesAt") as any) : null;
+    const last = raw?.toDate ? raw.toDate() : raw instanceof Date ? raw : null;
+    if (last && now.getTime() - last.getTime() < 5 * 60_000) return;
+  } catch {
+    // ignore
+  }
+
+  const templates = await getGroupExpenseTemplates(groupId);
+  if (!templates.length) {
+    try {
+      await db.collection("groups").doc(groupId).set({ lastEnsureDueTemplatesAt: nowUpdate().updatedAt }, { merge: true });
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  for (const t of templates as any[]) {
+    const templateId = String(t.id);
+    const frequency = (t.frequency || "monthly") as "weekly" | "monthly" | "yearly";
+    let due = new Date(t.nextDueDate);
+    if (Number.isNaN(due.getTime())) continue;
+
+    let lastProcessed: Date | null = null;
+    let nextDue = due;
+    let guard = 0;
+
+    while (nextDue.getTime() <= now.getTime() && guard++ < 24) {
+      const key = ymdKey(nextDue).replace(/-/g, "");
+      const expenseDocId = `tpl_${templateId}_${key}`;
+
+      try {
+        const splits = await computeTemplateSplits(groupId, t);
+        await db.collection("sharedExpenses").doc(expenseDocId).create({
+          groupId,
+          title: t.title,
+          description: t.description,
+          amount: t.amount,
+          currency: t.currency || "BRL",
+          category: t.category,
+          paidBy: t.paidBy,
+          date: new Date(nextDue.getFullYear(), nextDue.getMonth(), nextDue.getDate()),
+          createdBy: t.createdBy,
+          status: "pending",
+          allowMemberEdits: false,
+          splitMode: t.splitMode || "equal",
+          customSplits: t.customSplits,
+          isRecurring: true,
+          recurringFrequency: frequency,
+          parentExpenseId: templateId,
+          templateId,
+          dateKey: ymdKey(nextDue),
+          ...nowCreate(),
+        });
+
+        for (const s of splits) {
+          await db.collection("expenseSplits").add({
+            expenseId: expenseDocId,
+            userId: s.userId,
+            amount: s.amount,
+            paid: String(s.userId) === String(t.paidBy),
+            groupId,
+          });
+        }
+      } catch (err: any) {
+        if (!isAlreadyExistsError(err)) {
+          // falha inesperada: não avança para evitar perder recorrência
+          break;
+        }
+      }
+
+      lastProcessed = nextDue;
+      nextDue = nextDueFrom(nextDue, frequency);
+    }
+
+    if (lastProcessed) {
+      await updateExpenseTemplate(templateId, {
+        lastGenerated: lastProcessed,
+        nextDueDate: nextDue,
+      });
+    }
+  }
+
+  try {
+    await db.collection("groups").doc(groupId).set({ lastEnsureDueTemplatesAt: nowUpdate().updatedAt }, { merge: true });
+  } catch {
+    // ignore
+  }
 }
 
 export async function updateSharedExpense(id: string, data: any) {

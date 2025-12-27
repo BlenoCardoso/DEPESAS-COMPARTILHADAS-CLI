@@ -95,7 +95,7 @@ Se você mudou o nome do arquivo de regras, ajuste o caminho aqui.
 ### Upload de Anexo
 1. Usuário clica em "Adicionar Comprovante" ao criar/editar despesa
 2. Seleciona foto da galeria ou câmera
-3. Imagem é comprimida e enviada para Storage
+3. Imagem é comprimida e enviada para Storage no caminho `expense-attachments/{groupId}/{expenseId}/{fileName}`
 4. URL do anexo é salva no campo `attachmentUrl` da despesa
 
 ### Visualização

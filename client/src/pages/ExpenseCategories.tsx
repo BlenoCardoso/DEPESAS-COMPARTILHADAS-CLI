@@ -7,13 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { useCurrentGroup } from "@/contexts/CurrentGroupContext";
 import { trpc } from "@/lib/trpc";
 import { Edit2, Folder, Loader2, Plus, Trash2, Users } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryVisual";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { formatCents } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 // Categorias padrão do sistema
 const DEFAULT_CATEGORIES = [
@@ -38,10 +41,23 @@ export default function ExpenseCategories() {
   const { isAuthenticated, user } = useAuth();
   const { currentGroup, setCurrentGroupId } = useCurrentGroup();
   const groupId = currentGroup?.id ?? null;
+  const [location, navigate] = useLocation();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!location || !location.includes("cat=")) return;
+
+    const rawQuery = location.split("?")[1] || "";
+    const query = rawQuery.split("#")[0] || "";
+    const params = new URLSearchParams(query);
+    const cat = (params.get("cat") || "").trim();
+    if (!cat) return;
+    setSelectedCategory(cat);
+  }, [location]);
 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("📦");
@@ -53,6 +69,72 @@ export default function ExpenseCategories() {
     { groupId: groupId! },
     { enabled: !!groupId && isAuthenticated }
   );
+
+  const sharedExpensesQuery = trpc.sharedExpenses.list.useQuery(
+    { groupId: groupId! },
+    { enabled: !!groupId && isAuthenticated }
+  );
+
+  const categoryUsage = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        count: number;
+        totalAmount: number;
+        examples: string[];
+        items: Array<{ id: string; title: string; amount: number; date?: any }>;
+      }
+    >();
+    const list = (sharedExpensesQuery.data as any[]) || [];
+
+    for (const item of list) {
+      const exp = (item as any)?.expense ?? item;
+      const name = String(exp?.category || "").trim();
+      if (!name) continue;
+
+      const current =
+        map.get(name) ||
+        ({
+          count: 0,
+          totalAmount: 0,
+          examples: [],
+          items: [],
+        } as const);
+
+      const next = {
+        count: current.count + 1,
+        totalAmount: current.totalAmount + Number(exp?.amount || 0),
+        examples: current.examples.slice(),
+        items: current.items.slice(),
+      };
+
+      const title = String(exp?.title || "").trim();
+      if (title && next.examples.length < 3) next.examples.push(title);
+
+      next.items.push({
+        id: String(exp?.id || item?.id || `${name}-${next.count}`),
+        title: title || "(sem título)",
+        amount: Number(exp?.amount || 0),
+        date: exp?.date,
+      });
+
+      map.set(name, next);
+    }
+
+    // Ordena por data (desc) para o drawer mostrar as mais recentes primeiro
+    for (const [key, value] of map.entries()) {
+      value.items.sort((a, b) => {
+        const at = a.date ? new Date(a.date as any).getTime() : 0;
+        const bt = b.date ? new Date(b.date as any).getTime() : 0;
+        return bt - at;
+      });
+      map.set(key, value);
+    }
+
+    return map;
+  }, [sharedExpensesQuery.data]);
+
+  const selectedItems = selectedCategory ? categoryUsage.get(selectedCategory)?.items || [] : [];
 
   const createMutation = trpc.expenseCategories.create.useMutation({
     onSuccess: () => {
@@ -139,6 +221,55 @@ export default function ExpenseCategories() {
   return (
     <PageContainer title="Categorias de Despesas">
       <div className="space-y-4">
+        <Drawer open={!!selectedCategory} onOpenChange={(open) => !open && setSelectedCategory(null)}>
+          <DrawerContent className="min-h-0 overflow-hidden">
+            <DrawerHeader className="shrink-0">
+              <DrawerTitle>{selectedCategory || "Categoria"}</DrawerTitle>
+              <DrawerDescription>
+                {selectedCategory
+                  ? `${categoryUsage.get(selectedCategory)?.count || 0} despesas nesta categoria`
+                  : ""}
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-2">
+              {selectedItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma despesa vinculada a esta categoria.</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedItems.map((e) => (
+                    <div
+                      key={e.id}
+                      role="button"
+                      tabIndex={0}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-card p-3 cursor-pointer"
+                      onClick={() => navigate(`/shared-expenses?detail=${encodeURIComponent(e.id)}&from=categories&cat=${encodeURIComponent(selectedCategory || "")}`)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter" || ev.key === " ") {
+                          navigate(`/shared-expenses?detail=${encodeURIComponent(e.id)}&from=categories&cat=${encodeURIComponent(selectedCategory || "")}`);
+                        }
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{e.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {e.date ? new Date(e.date as any).toLocaleDateString("pt-BR") : "—"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-display tabular-nums text-sm font-semibold tracking-tight">{formatCents(e.amount)}</p>
+                        <p className="text-[11px] text-muted-foreground">valor</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DrawerFooter className="shrink-0">
+              <Button className="rounded-2xl" onClick={() => setSelectedCategory(null)}>Fechar</Button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+
         {/* Group Selector */}
         <Card>
           <CardHeader className="pb-3">
@@ -245,11 +376,29 @@ export default function ExpenseCategories() {
                       key={category.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-3 p-3 rounded-2xl border bg-card"
+                      className="flex items-center gap-3 p-3 rounded-2xl border bg-card cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedCategory(category.name)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") setSelectedCategory(category.name);
+                      }}
                     >
                       <CategoryIcon name={category.name} icon={category.icon} size="md" />
-                      <span className="font-medium flex-1">{category.name}</span>
-                      <Badge variant="secondary">Sistema</Badge>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{category.name}</p>
+                        {categoryUsage.get(category.name)?.examples?.length ? (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {categoryUsage.get(category.name)?.examples.join(" • ")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {categoryUsage.get(category.name)?.count ? (
+                          <Badge variant="outline">{categoryUsage.get(category.name)?.count} despesas</Badge>
+                        ) : null}
+                        <Badge variant="secondary">Sistema</Badge>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -283,10 +432,26 @@ export default function ExpenseCategories() {
                         key={category.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-3 p-3 rounded-2xl border bg-card hover:border-primary/50 transition-colors"
+                        className="flex items-center gap-3 p-3 rounded-2xl border bg-card hover:border-primary/50 transition-colors cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedCategory(category.name)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") setSelectedCategory(category.name);
+                        }}
                       >
                         <CategoryIcon name={category.name} icon={category.icon || "📦"} size="md" />
-                        <span className="font-medium flex-1">{category.name}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{category.name}</p>
+                          {categoryUsage.get(category.name)?.examples?.length ? (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {categoryUsage.get(category.name)?.examples.join(" • ")}
+                            </p>
+                          ) : null}
+                        </div>
+                        {categoryUsage.get(category.name)?.count ? (
+                          <Badge variant="outline">{categoryUsage.get(category.name)?.count} despesas</Badge>
+                        ) : null}
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"

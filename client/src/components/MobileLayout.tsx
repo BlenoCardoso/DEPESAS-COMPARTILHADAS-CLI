@@ -20,7 +20,9 @@ import {
   Home,
   LogOut,
   Menu,
+  MoreHorizontal,
   Plus,
+  X,
   PieChart,
   ReceiptText,
   Settings,
@@ -32,7 +34,7 @@ import {
   Folder,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 interface NavItem {
@@ -49,34 +51,38 @@ const PRIMARY_NAV: NavItem[] = [
   { icon: CreditCard, label: "Despesas Compartilhadas", path: "/shared-expenses" },
   { icon: Wallet, label: "Despesas Pessoais", shortLabel: "Pessoais", path: "/personal-expenses" },
   { icon: ArrowLeftRight, label: "Saldos do Grupo", shortLabel: "Saldos", path: "/group-balances" },
-  { icon: Repeat, label: "Despesas Recorrentes", shortLabel: "Recorrentes", path: "/expense-templates" },
-  { icon: Folder, label: "Categorias", path: "/expense-categories" },
   { icon: CheckSquare, label: "Tarefas", path: "/tasks" },
   { icon: Clock, label: "Lembretes", path: "/reminders" },
   { icon: Calendar, label: "Calendário", path: "/calendar" },
   { icon: PieChart, label: "Relatórios", path: "/reports" },
+  { icon: MoreHorizontal, label: "Mais opções", shortLabel: "Mais", path: "/more" },
 ];
 
 // Rotas acessíveis via atalhos/contexto (ex.: card na tela de Grupos),
 // mas que não devem aparecer no menu lateral.
 const HIDDEN_NAV_FOR_TITLES: NavItem[] = [
   { icon: Home, label: "Convites", path: "/invitations" },
+  { icon: Home, label: "Perfil", path: "/profile" },
+  { icon: Home, label: "Calculadora", path: "/calculator" },
+  { icon: Home, label: "Exportar dados", path: "/export-data" },
+  { icon: Home, label: "Importar dados", path: "/import-data" },
+  { icon: Home, label: "Despesas Recorrentes", path: "/expense-templates" },
+  { icon: Home, label: "Categorias", path: "/expense-categories" },
 ];
 
 const SUPPORT_NAV: NavItem[] = [
   { icon: Bell, label: "Notificações", path: "/notifications", showBadge: true },
   { icon: TrendingUp, label: "Perfil Financeiro", shortLabel: "Perfil", path: "/financial-profile" },
-  { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 
 const BOTTOM_NAV: NavItem[] = [
   { icon: Home, label: "Início", path: "/" },
   { icon: Users, label: "Grupos", path: "/groups" },
   { icon: ReceiptText, label: "Compartilhadas", path: "/shared-expenses" },
-  { icon: BarChart3, label: "Relatórios", path: "/reports" },
+  { icon: MoreHorizontal, label: "Mais", path: "/more" },
 ];
 
-const HEADER_SHORTCUT_PATHS = new Set(["/notifications", "/settings"]);
+const HEADER_SHORTCUT_PATHS = new Set(["/notifications"]);
 
 function isPathActive(currentPath: string, itemPath: string) {
   const cleanCurrent = currentPath.split("?")[0]?.split("#")[0] || "/";
@@ -104,6 +110,13 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const { currentGroup } = useCurrentGroup();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+
+  const locationKey = useMemo(() => {
+    const withoutQuery = (location || "/").split("?")[0] || "/";
+    return (withoutQuery.split("#")[0] || "/") as string;
+  }, [location]);
+
+  const isPublicAuthScreen = !user && (location === "/" || location === "/firebase-login");
 
   const { data: unreadCount } = trpc.notifications.getUnreadCount.useQuery(undefined, {
     enabled: Boolean(user),
@@ -146,108 +159,121 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         )}
 
         <div className="flex h-full min-h-0 flex-col">
-          <AppHeader
-            title={activeTitle}
-            variant="solid"
-            left={
-              forceMobile ? null : (
-                <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                        className={cn("hidden md:inline-flex lg:hidden", "interactive-tap rounded-2xl")}
-                    >
-                      <Menu className="h-5 w-5" />
-                      <span className="sr-only">Abrir menu</span>
-                    </Button>
-                  </SheetTrigger>
-                  <NavigationDrawer
-                    onNavigate={() => setIsMenuOpen(false)}
-                    unreadCount={unreadCount ?? 0}
-                    onLogout={handleLogout}
-                    userEmail={user?.email}
-                    userName={user?.name}
-                    userAvatarUrl={(user as any)?.avatarUrl}
-                    activePath={location}
-                  />
-                </Sheet>
-              )
-            }
-            right={
-              forceMobile ? (
-                <>
-                  <Link href="/notifications">
-                    <Button variant="ghost" size="icon" className="interactive-tap relative rounded-2xl">
-                      <Bell className="h-5 w-5" />
-                      {unreadCount && unreadCount > 0 && (
-                        <Badge
-                          variant="destructive"
-                          className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] justify-center px-1 text-[11px]"
-                        >
-                          {unreadCount > 9 ? "9+" : unreadCount}
-                        </Badge>
-                      )}
-                    </Button>
-                  </Link>
-                  <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="interactive-tap rounded-2xl">
-                      <Settings className="h-5 w-5" />
-                      <span className="sr-only">Configurações</span>
-                    </Button>
-                  </Link>
-                </>
-              ) : null
-            }
-          />
+          {!isPublicAuthScreen ? (
+            <AppHeader
+              title={activeTitle}
+              variant="solid"
+              left={
+                forceMobile ? null : (
+                  <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                          className={cn("hidden md:inline-flex lg:hidden", "interactive-tap rounded-2xl")}
+                      >
+                        <Menu className="h-5 w-5" />
+                        <span className="sr-only">Abrir menu</span>
+                      </Button>
+                    </SheetTrigger>
+                    <NavigationDrawer
+                      onNavigate={() => setIsMenuOpen(false)}
+                      unreadCount={unreadCount ?? 0}
+                      onLogout={handleLogout}
+                      userEmail={user?.email}
+                      userName={user?.name}
+                      userAvatarUrl={(user as any)?.avatarUrl}
+                      activePath={location}
+                    />
+                  </Sheet>
+                )
+              }
+              right={
+                forceMobile ? (
+                  <>
+                    <Link href="/notifications">
+                      <Button variant="ghost" size="icon" className="interactive-tap relative rounded-2xl">
+                        <Bell className="h-5 w-5" />
+                        {unreadCount && unreadCount > 0 && (
+                          <Badge
+                            variant="destructive"
+                            className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] justify-center px-1 text-[11px]"
+                          >
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                          </Badge>
+                        )}
+                      </Button>
+                    </Link>
+                  </>
+                ) : null
+              }
+            />
+          ) : null}
 
           <main
-            className="app-main-scroll min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0"
-            style={{ paddingBottom: forceMobile ? "calc(5rem + var(--safe-area-bottom))" : undefined }}
+            className={cn(
+              "app-main-scroll min-h-0 flex-1 overflow-y-auto",
+              isPublicAuthScreen ? "pb-0" : "pb-20 md:pb-0"
+            )}
+            style={{
+              paddingBottom:
+                forceMobile && !isPublicAuthScreen ? "calc(5rem + var(--safe-area-bottom))" : undefined,
+            }}
           >
-            <PageContainer as="div">
+            {isPublicAuthScreen ? (
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
-                  key={location}
+                  key={locationKey}
                   className="route-transition"
-                  initial={
-                    prefersReducedMotion
-                      ? { opacity: 1 }
-                      : { opacity: 0 }
-                  }
+                  initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  exit={
-                    prefersReducedMotion
-                      ? { opacity: 1 }
-                      : { opacity: 0 }
-                  }
+                  exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
                   transition={{ duration: prefersReducedMotion ? 0 : 0.22, ease: "easeOut" }}
                   style={{ willChange: "opacity" }}
                 >
                   {children}
                 </motion.div>
               </AnimatePresence>
-            </PageContainer>
+            ) : (
+              <PageContainer as="div">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={locationKey}
+                    className="route-transition"
+                    initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.22, ease: "easeOut" }}
+                    style={{ willChange: "opacity" }}
+                  >
+                    {children}
+                  </motion.div>
+                </AnimatePresence>
+              </PageContainer>
+            )}
           </main>
         </div>
       </div>
 
-      <BottomNavigation
-        forceMobile={forceMobile}
-        activePath={location}
-        unreadCount={unreadCount ?? 0}
-        onAdd={() => {
-          const clean = location.split("?")[0]?.split("#")[0] || "/";
-          const target = clean.startsWith("/personal-expenses")
-            ? "/personal-expenses?create=1"
-            : clean.startsWith("/shared-expenses")
-              ? "/shared-expenses?create=1"
-              : currentGroup?.id
+      {!isPublicAuthScreen ? (
+        <BottomNavigation
+          forceMobile={forceMobile}
+          activePath={location}
+          unreadCount={unreadCount ?? 0}
+          hasGroup={Boolean(currentGroup?.id)}
+          onAdd={() => {
+            const clean = location.split("?")[0]?.split("#")[0] || "/";
+            const target = clean.startsWith("/personal-expenses")
+              ? "/personal-expenses?create=1"
+              : clean.startsWith("/shared-expenses")
                 ? "/shared-expenses?create=1"
-                : "/personal-expenses?create=1";
-          setLocation(target);
-        }}
-      />
+                : currentGroup?.id
+                  ? "/shared-expenses?create=1"
+                  : "/personal-expenses?create=1";
+            setLocation(target);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -256,13 +282,22 @@ function BottomNavigation({
   forceMobile,
   activePath,
   unreadCount,
+  hasGroup,
   onAdd,
 }: {
   forceMobile: boolean;
   activePath: string;
   unreadCount: number;
+  hasGroup: boolean;
   onAdd: () => void;
 }) {
+  const [, navigate] = useLocation();
+  const [isFabOpen, setIsFabOpen] = useState(false);
+
+  useEffect(() => {
+    setIsFabOpen(false);
+  }, [activePath]);
+
   return (
     <nav
       className={cn(
@@ -270,6 +305,20 @@ function BottomNavigation({
         "safe-area-bottom fixed bottom-0 left-0 right-0 z-40 w-full border-t border-border/70 bg-card/95 shadow-md supports-[backdrop-filter]:bg-card/80 supports-[backdrop-filter]:backdrop-blur"
       )}
     >
+      <AnimatePresence>
+        {isFabOpen ? (
+          <motion.button
+            type="button"
+            aria-label="Fechar menu de ações"
+            className="fixed inset-0 z-30 cursor-default bg-background/30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsFabOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+
       <div className="relative mx-auto w-full max-w-5xl px-2 sm:px-4 overflow-visible">
         <div className="grid h-14 grid-cols-5 items-center overflow-visible">
           {BOTTOM_NAV.slice(0, 2).map((item) => {
@@ -300,16 +349,90 @@ function BottomNavigation({
           })}
 
           <div className="relative flex items-center justify-center">
+            <AnimatePresence>
+              {isFabOpen ? (
+                <motion.div
+                  key="fab-menu"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                  className="absolute bottom-16 left-1/2 z-50 w-[220px] -translate-x-1/2"
+                >
+                  <div className="rounded-2xl border border-border/70 bg-card/95 shadow-md supports-[backdrop-filter]:bg-card/80 supports-[backdrop-filter]:backdrop-blur p-2">
+                    <div className="grid gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="justify-start gap-2 rounded-xl"
+                        onClick={() => {
+                          setIsFabOpen(false);
+                          navigate("/personal-expenses?create=1");
+                        }}
+                      >
+                        <Wallet className="h-4 w-4" />
+                        Despesa pessoal
+                      </Button>
+
+                      {hasGroup ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="justify-start gap-2 rounded-xl"
+                          onClick={() => {
+                            setIsFabOpen(false);
+                            navigate("/shared-expenses?create=1");
+                          }}
+                        >
+                          <ReceiptText className="h-4 w-4" />
+                          Despesa compartilhada
+                        </Button>
+                      ) : null}
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="justify-start gap-2 rounded-xl"
+                        onClick={() => {
+                          setIsFabOpen(false);
+                          navigate("/tasks?create=1");
+                        }}
+                      >
+                        <CheckSquare className="h-4 w-4" />
+                        Tarefa
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="justify-start gap-2 rounded-xl"
+                        onClick={() => {
+                          setIsFabOpen(false);
+                          navigate("/reminders?create=1");
+                        }}
+                      >
+                        <Clock className="h-4 w-4" />
+                        Lembrete
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
             <Button
               type="button"
-              onClick={onAdd}
+              onClick={(e) => {
+                e.preventDefault();
+                setIsFabOpen((prev) => !prev);
+              }}
               className={cn(
                 "interactive-tap absolute -top-6 h-14 w-14 rounded-full p-0 bg-primary text-primary-foreground shadow-md ring-4 ring-background",
                 "hover:bg-primary/95"
               )}
-              aria-label="Adicionar despesa"
+              aria-label={isFabOpen ? "Fechar" : "Adicionar"}
             >
-              <Plus className="h-7 w-7" />
+              {isFabOpen ? <X className="h-7 w-7" /> : <Plus className="h-7 w-7" />}
             </Button>
           </div>
 
@@ -370,7 +493,7 @@ function NavigationDrawer({
   const drawerOrganizationSections = useMemo(() => {
     const secondary = PRIMARY_NAV.filter((item) => !bottomNavPaths.has(item.path));
 
-    const financePaths = new Set(["/personal-expenses", "/group-balances", "/expense-templates", "/expense-categories"]);
+    const financePaths = new Set(["/personal-expenses", "/group-balances"]);
     const planningPaths = new Set(["/tasks", "/reminders", "/calendar"]);
 
     const finance = secondary.filter((item) => financePaths.has(item.path));

@@ -12,8 +12,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 const CalendarEmptyIllustration = () => (
   <svg
@@ -60,6 +61,7 @@ const CalendarEmptyIllustration = () => (
 
 export default function Calendar() {
   const { isAuthenticated } = useAuth();
+  const [location, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().substring(0, 16));
@@ -119,6 +121,13 @@ export default function Calendar() {
     }
     return list;
   }, [eventsList, whenFilter, filterText]);
+
+  useEffect(() => {
+    if (!location || !location.includes("create=1")) return;
+    setIsCreateOpen(true);
+    const clean = (location.split("?")[0] || "/calendar").split("#")[0] || "/calendar";
+    if (clean !== location) navigate(clean);
+  }, [location, navigate]);
 
   const createMutation = trpc.calendar.create.useMutation({
     onSuccess: () => { toast.success("Evento criado"); setIsCreateOpen(false); setTitle(""); setEndDate(""); setAllDay(false); refetch(); },

@@ -12,11 +12,13 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { Clock, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 export default function Reminders() {
   const { isAuthenticated } = useAuth();
+  const [location, navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
@@ -93,6 +95,13 @@ export default function Reminders() {
     createMutation.mutate({ title, category: category || undefined, reminderDate: new Date(reminderDate) });
   };
   const handleDelete = (id: string) => { if (confirm("Remover lembrete?")) deleteMutation.mutate({ id }); };
+
+  useEffect(() => {
+    if (!location || !location.includes("create=1")) return;
+    setIsCreateOpen(true);
+    const clean = (location.split("?")[0] || "/reminders").split("#")[0] || "/reminders";
+    if (clean !== location) navigate(clean);
+  }, [location, navigate]);
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
